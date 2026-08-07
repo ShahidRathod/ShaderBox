@@ -6,12 +6,44 @@ constexpr int n_sz = 20;
 #define RESET "\x1b[0m"
 
 
-enum class TagType {
-    Entitiy , Shader , Copy , Paste
+
+using  hashT = unsigned int;
+
+constexpr hashT hash(const char* str) {
+    int n = 0;
+    hashT hash = 0;
+    int k = 0;
+    while (str[k] != '\0') {
+        hash += (hashT)(str[k]) * (2 << (k % 17));
+        k++;
+    }
+    return hash;
+
+}
+
+template <typename T, int sz>
+struct MemPool {
+    int len = 0;
+    T mem[sz];
+
+    T* request_mem() {
+        if (len + 1 > sz) {
+            std::cerr << "Mem pool memory overflow\n";
+            exit(EXIT_FAILURE);
+        }
+        return mem + len;
+        len++;
+    }
+};
+
+template <typename T>
+struct Node {
+    T val;
+    T* next;
 };
 
 
-enum class Allnames: int {
+enum class TagType : int {
     Vertex,
     Fragment,
     TessControl,
@@ -19,10 +51,28 @@ enum class Allnames: int {
     Geometry,
     Compute,
     Copy,
-
+    Paste,
+    Scope
 };
 
+
+template <typename T>
+struct Linked {
+
+    Node<T>* root;
+    Node<T>* end = root;
+
+    void add(T* nxt_ptr){
+        end->next = nxt_ptr;
+        end = end->next;
+    }
+};
+
+
 struct Tag {
+
+    Linked<hashT> hash_lst;
+    static MemPool<hashT, 100> hash_pool;
 
     int      start_ln_no;
     int      opn_tg_strt;
@@ -30,30 +80,28 @@ struct Tag {
     int      cntnt_end;
     int      cls_tg_end;
     int      end_ln_no;
-    char     names[3 * n_sz];
-    int      names_len = 0;
-    int      name_len;
-
-    char* str_for_write() {
-        return names + name_len * n_sz;
-        name_len++;
-
-    };
+    bool     is_writable;
+    char     name_buff[n_sz];
     Tag*     next = nullptr;
     Tag*     inside = nullptr;
     TagType  type;
-    
-    Tag () {}
+
+    Tag() {}
 
     char* str_for_write() {
-        return names + name_len * n_sz;
-        name_len++;
+        return name_buff;
+    }
+
+    char* str() { return name_buff; }
+    
+    void commit_hash() {
+
+        hash_lst.add(hash_pool.request_mem());
+        hash_lst.end->val = hash(name_buff);
 
     }
-    char* str() { return names + name_len * n_sz; }
-
     bool compare(const char* cstr) {
-        return !strcmp(str(), cstr);
+        return hash(str())== hash(cstr);
     }
 };
 
@@ -65,10 +113,10 @@ struct TagTree {
     Tag    root_obj;
     Tag*   root = arr;
     Tag*   curnt = root;
-    Tag**   top;
+    Tag**  top;
     Tag    stack[max_copy_depth];
     int    stk_len = 0;
-    
+
     TagTree() {}
 
     int len = 1;
@@ -78,33 +126,39 @@ struct TagTree {
         stk_len = x;
     }
 
-    void addInside() {
+    void addNext() {
+
         if (len >= sz) {
-            std::cerr << "Max camnd tag limit reached";
+            std::cerr << "Max tag limit reached";
             exit(EXIT_FAILURE);
         }
 
         Tag* ptr = *top;
-        while (ptr != nullptr) ptr=ptr->next;
+        while (ptr != nullptr) ptr = ptr->next;
+        
         ptr = arr + len;
-        addStack(ptr);
         len++;
 
     }
 
     void pop() { update_top(stk_len - 1); }
 
-    void addStack(Tag* obj) {
+    void addStack() {
+
+        if (len >= sz) {
+            std::cerr << "Max tag limit reached";
+            exit(EXIT_FAILURE);
+        }
+
         if (len + 1 > sz)
             std::cerr << RED "Max stack length reached\n" RESET;
         else {
             update_top(stk_len + 1);
-            *top = obj;
+            *top = arr+len;
+            len++;
         }
     }
-    Tag* findtag() {
-    
-    }
+
 
 };
 
@@ -130,6 +184,8 @@ struct TagWriter {
     }
 
     void tag_tree_write(Tag* root) {
+        
+        if (!root->is_writable) return;
 
         int st = root->cntnt_start;
         int end;
@@ -153,6 +209,7 @@ struct TagWriter {
 template <size_t sz, int N> struct ConstexprStr {
     static const int size = (sz + 1) * N;
     char data[size] = { ' ' };
+    hashT hashes[size] = {-1};
 
     constexpr ConstexprStr(const char* str) {
         for (int i = 0; i < size; i++)
@@ -176,23 +233,27 @@ template <size_t sz, int N> struct ConstexprStr {
             data[n + j] = c;
             n++;
         }
+
+        for (int i = 0; i < size; i++) {
+            hashes[i] = hash(operator[] (i));
+        }
     }
 
     constexpr const char* operator[](int i) const {
         return &data[(sz + 1) * i];
     }
 
-    bool has_at(char* str,int& indx) const{
-        int i = 0
+    bool has_at(char* str, int& indx) const {
+        int i = 0;
+        hashT str_h = hash(str);
         for (; i < N;i++) {
-            if (!strcmp(operator[](i),str) return true;
+            if (hashes[i] == str_h) return true;
         }
+
         indx = i;
         return false;
     }
 };
-
-
 
 
 template <int sz> struct CircularBuff {
@@ -220,4 +281,3 @@ template <int sz> struct CircularBuff {
         return is_equal;
     }
 };
-

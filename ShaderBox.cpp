@@ -26,12 +26,12 @@ constexpr int stage_count = 6;
 constexpr ConstexprStr <n_sz, stage_count>
 subtag_names{ "vertex,fragment,tess_control,tess_eval,geometry,compute," };
 
-constexpr int cammnds = 2;
+constexpr int cammnds = 3;
 constexpr ConstexprStr<n_sz, cammnds>
-cammnd_tags{ "copy,paste," };
+cammnd_tags{ "copy,paste,scope" };
 
 constexpr ConstexprStr <n_sz, stage_count + cammnds>
-all_names{ "vertex,fragment,tess_control,tess_eval,geometry,compute,copy,paste," };
+all_names{ "vertex,fragment,tess_control,tess_eval,geometry,compute,copy,paste,scope" };
 struct ShaderHandel {
     char  name[n_sz] = {};
     int   active_shaders[stage_count] = { 0 };
@@ -89,7 +89,7 @@ template <int b_sz, int n> struct ShaderReader {
     Tag* currnt_tag = *tgtree.top;
 
     void inscope() {
-        tgtree.addStack();
+        tgtree.goInside();
         currnt_tag = *tgtree.top;
 
         depth++;
@@ -97,7 +97,7 @@ template <int b_sz, int n> struct ShaderReader {
 
     void outscope() {
         tgtree.pop();
-        currnt_tag = tgtree.top;
+        currnt_tag = *tgtree.top;
         depth--;
     }
 
@@ -186,6 +186,10 @@ template <int b_sz, int n> struct ShaderReader {
         return tag_ended;
     }
 
+    void parse_scope_chain(){
+
+    }
+
     bool parse_tag() {
         int tag_start = char_no - 1;
         int start_ln = ln_no;
@@ -195,7 +199,7 @@ template <int b_sz, int n> struct ShaderReader {
         if (is_cls) {
             char cls_name[n_sz];
             cpy_tag_name_at_hlpr(cls_name, false);
-            bool is_same = !strcmp(currnt_tag->names, cls_name);
+            bool is_same = !strcmp(currnt_tag->name_buff, cls_name);
             if (!is_same) RAISE_CLOSE_TAG_MISMATCH(cls_name);
             currnt_tag->cntnt_end = tag_start;
             currnt_tag->end_ln_no = start_ln;
@@ -223,16 +227,19 @@ template <int b_sz, int n> struct ShaderReader {
 
             TagType type;
 
-            if (indx < (int)(Allnames::Copy)) {
+            if (indx < (int)(TagType::Copy)) {
                 RAISE_INVALID_TAG_NAME(currnt_tag->str());
             }
 
-            bool is_pst = indx == (int)Allnames::Paste;
-            bool tg_ended = cpy_tag_name_at(is_pst);
-            type = (TagType)(indx - (int)Allnames::Copy);
-            currnt_tag->type = type;
-            if (is_pst && !tg_ended) cpy_tag_name_at(false);
+            type = (TagType)(indx);
+            
+            bool is_pst = type == TagType::Paste;
+            bool is_cpy = type == TagType::Copy;
 
+            bool tg_ended = cpy_tag_name_at(is_pst);
+            currnt_tag->type = type;
+            
+            if (is_pst && !tg_ended) cpy_tag_name_at(false);
         }
         return is_cls;
     }
@@ -415,40 +422,11 @@ template <int b_sz, int n> struct ShaderReader {
 
     }
 
-    ShaderHandel& operator[](const char* str) {
-        int elmen_indx = 0;
-        bool found = false;
-
-        for (int i = 0; i < n; i++) {
-            if (strcmp(str, handel[i].name) == 0) {
-                found = true;
-                elmen_indx = i;
-                break;
-            }
-        }
-
-        if (!found) {
-            RAISE_UNKNOWN_ELEMENT(str);
-        }
-
-        return handel[elmen_indx];
-    }
 };
 
-char* ShaderHandel::operator[](const char* shdr) {
-    int indx = check_subtag(shdr);
-    if (active_shaders[indx] == 0) {
-        RAISE_INACTIVE_SHADER_ACCESS(shdr, name);
-    }
-    return shadr_ptrs[indx];
-}
 
 int main() {
-    ShaderReader<3000, 2> shader_reader("shaders.h");
-
-    // SHADER LOADING
-    char* vertex_shader = shader_reader["surface"]["vertex"];
-    char* fragment_shader = shader_reader["surface"]["fragment"];
+ 
 
 
 }
