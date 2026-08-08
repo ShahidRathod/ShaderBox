@@ -9,12 +9,12 @@ constexpr int n_sz = 20;
 
 using  hashT = unsigned int;
 
-constexpr hashT hash(const char* str) {
-    int n = 0;
+constexpr hashT hash(const char* str,int n =0) {
     hashT hash = 0;
     int k = 0;
     while (str[k] != '\0') {
-        hash += (hashT)(str[k]) * (2 << (k % 17));
+        int i = n + k;
+        hash += (hashT)(str[i]) * (2 << (i % 17));
         k++;
     }
     return hash;
@@ -39,7 +39,7 @@ struct MemPool {
 template <typename T>
 struct Node {
     T val;
-    T* next;
+    Node<T>* next;
 };
 
 
@@ -58,21 +58,24 @@ enum class TagType : int {
 
 template <typename T>
 struct Linked {
+    using NodeT = Node<T>;
+    NodeT* root;
+    NodeT* end = root;
 
-    Node<T>* root;
-    Node<T>* end = root;
-
-    void add(T* nxt_ptr){
+    void add(NodeT* nxt_ptr){
         end->next = nxt_ptr;
         end = end->next;
     }
 };
 
+using HashLinkT = Linked<hashT>;
+using HashNode = Node<hashT>;
+
 
 struct Tag {
-
-    Linked<hashT> hash_lst;
-    static MemPool<hashT, 100> hash_pool;
+   
+    HashLinkT hash_lst;
+    static MemPool<HashNode, 100> hash_pool;
 
     int      start_ln_no;
     int      opn_tg_strt;
@@ -83,13 +86,14 @@ struct Tag {
     bool     is_writable;
     char     name_buff[n_sz];
     char     tag_name[n_sz];
+    hashT    tag_hash;
     Tag*     next = nullptr;
     Tag*     inside = nullptr;
     TagType  type;
 
     Tag() {}
 
-    char* str_for_write() {
+    char* str_hash_lst() {
         return name_buff;
     }
 
@@ -123,7 +127,7 @@ struct TagTree {
     int len = 1;
 
     void update_top(int x) {
-        top = &(arr + x);
+        *top = (arr + x);
         stk_len = x;
     }
 
@@ -160,6 +164,26 @@ struct TagTree {
         }
     }
 
+    Tag* find_hlpr(HashNode* hash, Tag* ptr,Tag* prnt ) {
+
+        while (ptr != nullptr) {
+
+            if (hash->val == ptr->tag_hash) {
+                if (hash->next == nullptr) return ptr;
+                find_hlpr(hash->next, ptr->inside,ptr);
+                break;
+            }
+
+            ptr = ptr->next;
+        }
+
+        find_hlpr(hash,prnt->next->inside,prnt->next);/888888888888888888888888888888888*
+    }
+
+    Tag* find(HashLinkT hash_link) {
+        Tag* res = find_hlpr(hash_link.root,root,root);
+        return res;
+    }
 
 };
 
@@ -235,7 +259,7 @@ template <size_t sz, int N> struct ConstexprStr {
             n++;
         }
 
-        for (int i = 0; i < size; i++) {
+        for (int i = 0; i < N; i++) {
             hashes[i] = hash(operator[] (i));
         }
     }

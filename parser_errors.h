@@ -50,9 +50,9 @@
                      << " is already defined line at (" << (l1) << ", "        \
                      << (l2) << ")")
 
-#define RAISE_CLOSE_TAG_MISMATCH(close_name)                         \
-    RAISE_PRINT_EXIT("Close tag subtag name:" << (close_name)                  \
-                     << " does not match with " << (currnt_tag->names) << "\n")
+#define RAISE_CLOSE_TAG_MISMATCH()                         \
+    RAISE_PRINT_EXIT("Close tag subtag name:"                   \
+                     << " does not match with open tag name"  << "\n")
 
 #define RAISE_INSUFFICIENT_SPACE                                                \
     RAISE_PRINT_EXIT("INSUFFICIENT SPACE \n")
