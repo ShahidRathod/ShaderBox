@@ -20,7 +20,7 @@ constexpr hashT hash(const char* str) {
     return hash;
 
 }
-
+bool hash_compare(char* str1, char* str2) { return hash(str1) == hash(str2); }
 template <typename T, int sz>
 struct MemPool {
     int len = 0;
@@ -82,6 +82,7 @@ struct Tag {
     int      end_ln_no;
     bool     is_writable;
     char     name_buff[n_sz];
+    char     tag_name[n_sz];
     Tag*     next = nullptr;
     Tag*     inside = nullptr;
     TagType  type;
@@ -101,7 +102,7 @@ struct Tag {
 
     }
     bool compare(const char* cstr) {
-        return hash(str())== hash(cstr);
+        return hash_compare(str(), (char*)cstr);
     }
 };
 

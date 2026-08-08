@@ -89,9 +89,8 @@ template <int b_sz, int n> struct ShaderReader {
     Tag* currnt_tag = *tgtree.top;
 
     void inscope() {
-        tgtree.goInside();
+        tgtree.addStack();
         currnt_tag = *tgtree.top;
-
         depth++;
     }
 
@@ -100,6 +99,8 @@ template <int b_sz, int n> struct ShaderReader {
         currnt_tag = *tgtree.top;
         depth--;
     }
+   
+    hashT currnt_tag_hash() { currnt_tag->hash_lst.root->val; }
 
     char get_nxt() {
         int c = buffer[char_no];
@@ -132,17 +133,51 @@ template <int b_sz, int n> struct ShaderReader {
     }
 
 
-    void is_nxt_token_tag() {
+    bool is_nxt_token(char c ) {
         skip_whitespc();
         get_nxt();
-        cursr != '<';
+        return cursr != c;
     }
 
-    bool cpy_tag_name_at_hlpr(char* name_dst, bool expect_space) {
+    template <auto end_cheaker>
+    void cpy_plain_name(char* dst, bool& tag_ended ,bool expect_spc) {
+        int t_name_indx = 0;
+        while (end_cheaker(cursr)) {
+
+            if (isspace(cursr)) {
+                tag_ended = false;
+                if (expect_spc) break;
+                skip_whitespc();
+                if (end_cheaker(cursr))
+                    break;
+                else
+                    RAISE_SHADER_NAME_HAS_WHITESPACE;
+            }
+            if (t_name_indx >= n_sz) {
+                RAISE_SHADER_NAME_TOO_LONG(n_sz, dst);
+            }
+
+            if (isalnum(cursr) == 0 && cursr != '_') {
+                RAISE_SHADER_NAME_INVALID_CHAR(cursr);
+            }
+
+            dst[t_name_indx++] = cursr;
+            get_nxt();
+        }
+
+        get_nxt();
+        dst[t_name_indx + 1] = '\n';
+    }
+
+    bool cpy_tag_name_at_hlpr(char* name_dst, bool expect_spc) {
+
+        auto end_func = [](char c) {return c == ' ';};
+
         bool tag_ended = true;
         if (skip_whitespc()) {
             RAISE_NO_NEWLINE_INSIDE_TAGS;
         }
+
         // firt character in tag after the whitespace being skipped is first
         // character of name
         if (!isalpha(cursr)) {
@@ -150,44 +185,25 @@ template <int b_sz, int n> struct ShaderReader {
         }
 
         char temp_name[n_sz] = {};
-        int t_name_indx = 0;
-        while (cursr != '>') {
+        cpy_plain_name<end_func>(temp_name,tag_ended,expect_spc);
 
-            if (isspace(cursr)) {
-                tag_ended = false;
-                if (expect_space) break;
-                skip_whitespc();
-                if (cursr == '>')
-                    break;
-                else
-                    RAISE_SHADER_NAME_HAS_WHITESPACE;
-            }
-            if (t_name_indx >= n_sz) {
-                RAISE_SHADER_NAME_TOO_LONG(n_sz, temp_name);
-            }
-
-            if (isalnum(cursr) == 0 && cursr != '_') {
-                RAISE_SHADER_NAME_INVALID_CHAR(cursr);
-            }
-
-            temp_name[t_name_indx++] = cursr;
-            get_nxt();
-        }
-
-        get_nxt();
-        temp_name[t_name_indx + 1] = '\n';
         strcpy(name_dst, temp_name);
         return tag_ended;
+
     }
 
     bool cpy_tag_name_at(bool expect_spc) {
-        bool tag_ended = cpy_tag_name_at_hlpr(currnt_tag->str_for_write(), expect_spc);
+        bool tag_ended = cpy_tag_name_at_hlpr(currnt_tag->tag_name, expect_spc);
         if (tag_ended) currnt_tag->cntnt_start = char_no;
         return tag_ended;
     }
 
-    void parse_scope_chain(){
-
+    void parse_scope_chain() {
+        
+        while (cursr == ':') {
+            cpy_plain_name(currnt_tag->str_for_write(),);
+            currnt_tag->
+        }
     }
 
     bool parse_tag() {
@@ -199,8 +215,9 @@ template <int b_sz, int n> struct ShaderReader {
         if (is_cls) {
             char cls_name[n_sz];
             cpy_tag_name_at_hlpr(cls_name, false);
-            bool is_same = !strcmp(currnt_tag->name_buff, cls_name);
-            if (!is_same) RAISE_CLOSE_TAG_MISMATCH(cls_name);
+
+            bool is_same = currnt_tag_hash() == hash(cls_name);
+            if (!is_same) RAISE_CLOSE_TAG_MISMATCH();
             currnt_tag->cntnt_end = tag_start;
             currnt_tag->end_ln_no = start_ln;
             currnt_tag->cls_tg_end = char_no;
@@ -217,16 +234,13 @@ template <int b_sz, int n> struct ShaderReader {
         char* first_str = currnt_tag->str();
 
         int indx;
-
         if (!all_names.has_at(first_str, indx) && depth > 1) {
-
             RAISE_INVALID_TAG_NAME(currnt_tag->str());
         }
 
         if (expect_spc) {
 
             TagType type;
-
             if (indx < (int)(TagType::Copy)) {
                 RAISE_INVALID_TAG_NAME(currnt_tag->str());
             }
