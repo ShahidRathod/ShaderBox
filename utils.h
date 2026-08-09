@@ -1,9 +1,76 @@
 #pragma once
 #include <cstdlib>
+#include "parser_errors.h"
 
 constexpr int n_sz = 20;
 #define RED "\x1b[31m"
 #define RESET "\x1b[0m"
+
+
+template <size_t sz, int N>
+struct ConstexprStr {
+    static const int size = (sz + 1) * N;
+    char data[size] = { ' ' };
+    hashT hashes[size] = { -1 };
+
+    constexpr ConstexprStr(const char* str) {
+        for (int i = 0; i < size; i++) data[i] = ' ';
+
+        int indx = 0;
+        int n = 0;
+        int j = 0;
+        char c = 0;
+
+        for (int i = 0; i < size && n + j < size; i++) {
+            c = str[i];
+            if (c == '\0')
+                break;
+            else if (c == ',') {
+                data[n + j] = '\0';
+                n = j / sz + 1;
+                j += sz;
+                continue;
+            }
+            data[n + j] = c;
+            n++;
+        }
+
+        for (int i = 0; i < N; i++) {
+            hashes[i] = hash(operator[](i));
+        }
+    }
+
+    constexpr const char* operator[](int i) const {
+        return &data[(sz + 1) * i];
+    }
+
+    bool has_at(char* str, int& indx) const {
+        int i = 0;
+        hashT str_h = hash(str);
+        for (; i < N; i++) {
+            if (hashes[i] == str_h) return true;
+        }
+
+        indx = i;
+        return false;
+    }
+};
+
+
+
+
+constexpr int stage_count = 6;
+constexpr ConstexprStr <n_sz, stage_count>
+subtag_names{ "vertex,fragment,tess_control,tess_eval,geometry,compute," };
+
+constexpr int cammnds = 3;
+constexpr ConstexprStr<n_sz, cammnds>
+cammnd_tags{ "copy,paste,scope" };
+
+constexpr ConstexprStr <n_sz, stage_count + cammnds>
+all_names{ "vertex,fragment,tess_control,tess_eval,geometry,compute,copy,paste,scope" };
+
+
 
 using hashT = unsigned int;
 
@@ -85,9 +152,18 @@ struct Tag {
     Tag* inside = nullptr;
     TagType type;
 
-    Tag(int index, int depth) {
+    Tag() {}
+
+    int init_Tag(int depth) { // assumes the tag_name is already written
+
         if (depth > 1) is_writable = true;
+        int type_indx;
+        if (!all_names.has_at(name_buff, type_indx) && depth > 1) {
+            RAISE_INVALID_TAG_NAME(name_buff);
+        }
+        return type_indx;
     }
+
 
     char* str_hash_lst() { return name_buff; }
 
@@ -236,55 +312,6 @@ struct TagWriter {
         }
 
         write_by_range(st, root->cntnt_end);
-    }
-};
-
-template <size_t sz, int N> 
-struct ConstexprStr {
-    static const int size = (sz + 1) * N;
-    char data[size] = { ' ' };
-    hashT hashes[size] = { -1 };
-
-    constexpr ConstexprStr(const char* str) {
-        for (int i = 0; i < size; i++) data[i] = ' ';
-
-        int indx = 0;
-        int n = 0;
-        int j = 0;
-        char c = 0;
-
-        for (int i = 0; i < size && n + j < size; i++) {
-            c = str[i];
-            if (c == '\0')
-                break;
-            else if (c == ',') {
-                data[n + j] = '\0';
-                n = j / sz + 1;
-                j += sz;
-                continue;
-            }
-            data[n + j] = c;
-            n++;
-        }
-
-        for (int i = 0; i < N; i++) {
-            hashes[i] = hash(operator[](i));
-        }
-    }
-
-    constexpr const char* operator[](int i) const {
-        return &data[(sz + 1) * i];
-    }
-
-    bool has_at(char* str, int& indx) const {
-        int i = 0;
-        hashT str_h = hash(str);
-        for (; i < N; i++) {
-            if (hashes[i] == str_h) return true;
-        }
-
-        indx = i;
-        return false;
     }
 };
 

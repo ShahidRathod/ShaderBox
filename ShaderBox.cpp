@@ -7,7 +7,6 @@
 #include <cstring>
 #include <iostream>
 #include "utils.h"
-#include "parser_errors.h"
 
 
 using std::cerr;
@@ -21,16 +20,6 @@ enum class Space : int {
     NotAllowed, Allowed
 };
 
-constexpr int stage_count = 6;
-constexpr ConstexprStr <n_sz, stage_count>
-subtag_names{ "vertex,fragment,tess_control,tess_eval,geometry,compute," };
-
-constexpr int cammnds = 3;
-constexpr ConstexprStr<n_sz, cammnds>
-cammnd_tags{ "copy,paste,scope" };
-
-constexpr ConstexprStr <n_sz, stage_count + cammnds>
-all_names{ "vertex,fragment,tess_control,tess_eval,geometry,compute,copy,paste,scope" };
 
 struct ShaderHandel {
     char  name[n_sz] = {};
@@ -88,11 +77,11 @@ template <int b_sz, int n> struct ShaderReader {
 
     Tag* currnt_tag = *tgtree.top;
 
- 
+
     void inscope() {
         Tag* new_tag = tgtree.make_tag();
         tgtree->addNext(new_tg)
-        tgtree.addStack(new_tg);
+            tgtree.addStack(new_tg);
         currnt_tag = *tgtree.top; // should be same as new_tg
         depth++;
     }
@@ -102,7 +91,7 @@ template <int b_sz, int n> struct ShaderReader {
         currnt_tag = *tgtree.top;
         depth--;
     }
-   
+
     hashT currnt_tag_hash() { currnt_tag->hash_lst.root->val; }
 
     char get_nxt() {
@@ -136,14 +125,14 @@ template <int b_sz, int n> struct ShaderReader {
     }
 
 
-    bool is_nxt_token(char c ) {
+    bool is_nxt_token(char c) {
         skip_whitespc();
         get_nxt();
         return cursr != c;
     }
 
-    
-    void cpy_tag_str(char* dst,bool expect_spc,char end_delim) {
+
+    void cpy_tag_str(char* dst, bool expect_spc, char end_delim) {
 
         if (skip_whitespc()) {
             RAISE_NO_NEWLINE_INSIDE_TAGS;
@@ -161,14 +150,14 @@ template <int b_sz, int n> struct ShaderReader {
 
         char temp_name[n_sz] = {};
 
-        while (cursr!=end_delim) {
+        while (cursr != end_delim) {
 
             if (isspace(cursr)) {
-                
-                if (!expect_spc) 
+
+                if (!expect_spc)
                     break; // if space is not expected then break
-                skip_whitespc();       
-                if (cursr = end_delim) 
+                skip_whitespc();
+                if (cursr = end_delim)
                     break; //skip white space then check for end_delim if space is 
                 else {
                     RAISE_SHADER_NAME_HAS_WHITESPACE;
@@ -191,15 +180,15 @@ template <int b_sz, int n> struct ShaderReader {
         dst[t_name_indx + 1] = '\n';
     }
 
-    
+
 
     void initiate_tag(bool expect_spc) {
 
-        char c = (expect_spc)? '>' : ' ';
-        cpy_tag_str(currnt_tag->tag_name, expect_spc,c);
+        char c = (expect_spc) ? '>' : ' ';
+        cpy_tag_str(currnt_tag->tag_name, expect_spc, c);
         currnt_tag->tag_hash = hash(currnt_tag->tag_name);
         currnt_tag->cntnt_start = char_no;
-        
+
     }
 
     void parse_scope_tree(TagType type) {
@@ -210,15 +199,27 @@ template <int b_sz, int n> struct ShaderReader {
             currnt_tag->commit_hash();
         }
 
-        if (type == TagType::Paste) { 
+        if (type == TagType::Paste) {
             HashLinkT currnt_hash_link = currnt_tag->hash_lst;
             Tag* tg_found = tgtree.find(currnt_hash_link);
-            if (tgtree.find_in_branch(tg_found, (currnt_hash_lst.root)) ) {
+            if (tgtree.find_in_branch(tg_found, (currnt_hash_lst.root))) {
                 RAISE_RECURSIVE_PASTING;
             }
             tgtree.addNext(tg_found);
         }
+    }
 
+    void parse_end_tag() {
+        char cls_name[n_sz];
+
+        cpy_tag_str(cls_name, false, '>');
+
+        bool is_same = currnt_tag_hash() == hash(cls_name);
+        if (!is_same) RAISE_CLOSE_TAG_MISMATCH();
+        currnt_tag->cntnt_end = tag_start;
+        currnt_tag->end_ln_no = start_ln;
+        currnt_tag->cls_tg_end = char_no;
+        outscope();
     }
 
     bool parse_tag() {
@@ -228,16 +229,7 @@ template <int b_sz, int n> struct ShaderReader {
         bool is_cls = !skip_whitespc() && cursr == '/';
 
         if (is_cls) {
-            char cls_name[n_sz];
-            
-            cpy_tag_str (cls_name, false,'>');
-
-            bool is_same = currnt_tag_hash() == hash(cls_name);
-            if (!is_same) RAISE_CLOSE_TAG_MISMATCH();
-            currnt_tag->cntnt_end = tag_start;
-            currnt_tag->end_ln_no = start_ln;
-            currnt_tag->cls_tg_end = char_no;
-            outscope();
+            parse_end_tag();
             return is_cls;
         }
         
@@ -250,12 +242,7 @@ template <int b_sz, int n> struct ShaderReader {
         initiate_tag(expect_spc);
 
         char* first_str = currnt_tag->tag_name;
-
-        int indx;
-
-        if (!all_names.has_at(first_str, indx) && depth > 1) {
-            RAISE_INVALID_TAG_NAME(currnt_tag->str());
-        }
+        int indx = currnt_tag->init_Tag();
 
         if (expect_spc) {
 
@@ -268,120 +255,36 @@ template <int b_sz, int n> struct ShaderReader {
         return is_cls;
     }
 
+    bool check_tag_syntax() {
+        int tag_start = char_no;
+        char tg_special_chars = "/:";
+        int  count[2];
+        int pos[2];
+
+        while (cursr != '>' && char_no > file_sz) {
+            if (!isalnum(cursr)) {
+                if (cursr == '/') {
+                    if (!count[0]++) return false;
+                }
+                else if (cursr == ':') {
+                    if (!count[1]++) {
+                        pos[1]++;
+                    }
+                }
+                else return false;
+            }
+        }
+        if (pos[0] > pos[1]) return false;
+        return true;
+    }
+
     void content_loop() {
-        while ((cursr != '<' && !at_comnt) && char_no>file)
+        while ((cursr != '<' && !at_comnt) && char_no>file_sz)
             get_nxt();
-
+        if (check_tag_syntax()) parse_tag();
+        content_loop();
     }
 
-    void read_element() {
-        char* element_name = curnt_element->name;
-
-        is_nxt_token_tag();
-        initiate_tag(element_name);
-
-        currnt_tag.start = char_no;
-
-        char name_buff[n_sz] = {};
-
-        for (int i = 0; i < stage_count; i++) {
-            is_nxt_token_tag();
-            bool is_cls = !skip_whitespc() && cursr == '/';
-            if (is_cls)
-                get_nxt();
-
-            initiate_tag(name_buff);
-
-            if (is_cls) {
-                if (strcmp(name_buff, element_name) != 0) {
-                    RAISE_ELEMENT_TAG_MISMATCH(element_name, name_buff, curnt_indx);
-                }
-
-                curnt_element->end = ln_no;
-                break;
-            }
-            else {
-                int type_indx = check_subtag(name_buff);
-
-                curnt_element->shdr_line_no[2 * type_indx] = ln_no;
-
-                if ((curnt_element->active_shaders[type_indx]++) > 1) {
-                    RAISE_SHADER_ALREADY_DEFINED(
-                        name_buff,
-                        curnt_element->shdr_line_no[2 * type_indx],
-                        curnt_element->shdr_line_no[2 * type_indx + 1]);
-                }
-
-                read_shader_content(type_indx, name_buff);
-            }
-        }
-    }
-
-    int get_content_len(int& cntn_start, int& cntn_end, int& tag_start) {
-        cntn_start = ftell(file) - 1;
-        bool cls_found = false;
-        bool has_newln;
-
-        do {
-            has_newln = false;
-            content_loop();
-
-            cntn_end = ftell(file) - 1;
-            get_nxt(); // to get past the '<'
-            has_newln = skip_whitespc();
-
-        } while (is_end_or_cmnd());
-
-        // if (has_newln) PRINT_EXIT("No newline character inside tags\n");
-        if (has_newln)
-            printf(RED "Warning newline character in tag "
-                "will cause undefined behaviour.\n" RESET);
-
-        tag_start = ftell(file);
-        long len = cntn_end - cntn_start;
-
-        get_nxt(); // to make the cursr past the '/' charater
-        // because in the cpy_tag_name_at has skip_whitepsc
-        //  and it will terminate immediately if the cursr is not a whitespc
-        return len;
-    }
-
-    int write_from_at(int start, int len, char* write_dst) {
-        fseek(file, start, SEEK_SET);
-        size_t sz_read = fread(write_dst, sizeof(char), len, file);
-        return sz_read;
-    }
-
-
-    template <bool reading_shader>
-    void read_tag_content(int type_indx, char* opn_tg) {
-
-
-        int len = get_content_len();
-
-        if constexpr (reading_shader) {
-            curnt_element->
-                shdr_line_no[2 * type_indx + 1] = ln_no;
-            // end line of the shader
-        }
-
-        char cls_shdr_tg[max_subtg_name_len];
-        initiate_tag(cls_shdr_tg);
-
-        long tg_end = ftell(file);
-
-        long tg_len = tg_end - tg_strt;
-
-        // int i  = check_subtag(cls_shdr_tg);
-
-        if (strcmp(opn_tg, cls_shdr_tg) != 0) {
-            RAISE_CLOSE_TAG_MISMATCH(cls_shdr_tg, opn_tg);
-        }
-    }
-
-    void read_shader_content(int type_indx, char* opn_shdr_tg) {
-        return read_tag_content<true>(type_indx, opn_shdr_tg);
-    }
 
     FILE* open_file(const char* file_name) {
         FILE* file = fopen(file_name, "r");
