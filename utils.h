@@ -5,11 +5,9 @@ constexpr int n_sz = 20;
 #define RED "\x1b[31m"
 #define RESET "\x1b[0m"
 
+using hashT = unsigned int;
 
-
-using  hashT = unsigned int;
-
-constexpr hashT hash(const char* str,int n =0) {
+constexpr hashT hash(const char* str, int n = 0) {
     hashT hash = 0;
     int k = 0;
     while (str[k] != '\0') {
@@ -18,7 +16,6 @@ constexpr hashT hash(const char* str,int n =0) {
         k++;
     }
     return hash;
-
 }
 bool hash_compare(char* str1, char* str2) { return hash(str1) == hash(str2); }
 template <typename T, int sz>
@@ -42,7 +39,6 @@ struct Node {
     Node<T>* next;
 };
 
-
 enum class TagType : int {
     Vertex,
     Fragment,
@@ -55,14 +51,14 @@ enum class TagType : int {
     Scope
 };
 
-
 template <typename T>
 struct Linked {
     using NodeT = Node<T>;
     NodeT* root;
     NodeT* end = root;
 
-    void add(NodeT* nxt_ptr){
+    
+    void add(NodeT* nxt_ptr) {
         end->next = nxt_ptr;
         end = end->next;
     }
@@ -71,56 +67,54 @@ struct Linked {
 using HashLinkT = Linked<hashT>;
 using HashNode = Node<hashT>;
 
-
 struct Tag {
-   
     HashLinkT hash_lst;
     static MemPool<HashNode, 100> hash_pool;
 
-    int      start_ln_no;
-    int      opn_tg_strt;
-    int      cntnt_start;
-    int      cntnt_end;
-    int      cls_tg_end;
-    int      end_ln_no;
-    bool     is_writable;
-    char     name_buff[n_sz];
-    char     tag_name[n_sz];
-    hashT    tag_hash;
-    Tag*     next = nullptr;
-    Tag*     inside = nullptr;
-    TagType  type;
+    int start_ln_no;
+    int opn_tg_strt;
+    int cntnt_start;
+    int cntnt_end;
+    int cls_tg_end;
+    int end_ln_no;
+    bool is_writable = false;
+    char name_buff[n_sz];
+    char tag_name[n_sz];
+    hashT tag_hash;
+    Tag* next = nullptr;
+    Tag* inside = nullptr;
+    TagType type;
 
-    Tag() {}
-
-    char* str_hash_lst() {
-        return name_buff;
+    Tag(int index, int depth) {
+        if (depth > 1) is_writable = true;
     }
+
+    char* str_hash_lst() { return name_buff; }
 
     char* str() { return name_buff; }
-    
-    void commit_hash() {
 
+    void commit_hash() {
         hash_lst.add(hash_pool.request_mem());
         hash_lst.end->val = hash(name_buff);
-
     }
-    bool compare(const char* cstr) {
-        return hash_compare(str(), (char*)cstr);
-    }
+    bool compare(const char* cstr) { return hash_compare(str(), (char*)cstr); }
 };
-
-
 
 template <int sz, int max_copy_depth>
 struct TagTree {
-    Tag    arr[sz];
-    Tag    root_obj;
-    Tag*   root = arr;
-    Tag*   curnt = root;
-    Tag**  top;
-    Tag    stack[max_copy_depth];
-    int    stk_len = 0;
+    Tag arr[sz];
+    Tag root_obj;
+    Tag* root = arr;
+    Tag* curnt = root;
+    Tag** top;
+
+    Tag stack[max_copy_depth];
+    int stk_len = 0;
+
+    Tag* level[sz];
+    int level_offset = 0;
+    int level_sz = 0;
+    int nxt_level_sz = 0;
 
     TagTree() {}
 
@@ -131,65 +125,84 @@ struct TagTree {
         stk_len = x;
     }
 
-    void addNext() {
-
+    Tag* make_tag() { // gets memory 
         if (len >= sz) {
             std::cerr << "Max tag limit reached";
             exit(EXIT_FAILURE);
         }
 
+        Tag* new_tg = arr + len;
+        len++;
+        return new_tg;
+    }
+    
+    void addNext(Tag* nxt) { // add to next to current_scope
+
         Tag* ptr = *top;
         while (ptr != nullptr) ptr = ptr->next;
-        
-        ptr = arr + len;
-        len++;
+        ptr = nxt;
 
     }
 
     void pop() { update_top(stk_len - 1); }
 
-    void addStack() {
-
-        if (len >= sz) {
-            std::cerr << "Max tag limit reached";
-            exit(EXIT_FAILURE);
-        }
-
-        if (len + 1 > sz)
+    void addStack(Tag * ptr) { // just adds into stack whatever ptr is passed
+        if (stk_len  >= max_copy_depth)
             std::cerr << RED "Max stack length reached\n" RESET;
         else {
             update_top(stk_len + 1);
-            *top = arr+len;
-            len++;
+            *top = ptr;
         }
     }
 
-    Tag* find_hlpr(HashNode* hash, Tag* ptr,Tag* prnt ) {
+    Tag* find_hlpr(HashNode* hash) {
 
-        while (ptr != nullptr) {
+        level_offset += level_sz;
+        level_sz = nxt_level_sz;
+        nxt_level_sz = 0;
 
-            if (hash->val == ptr->tag_hash) {
-                if (hash->next == nullptr) return ptr;
-                find_hlpr(hash->next, ptr->inside,ptr);
-                break;
+        for (int i = 0; i < level_sz; i++) {
+
+            Tag* inside_ptr = level[i + level_offset];
+            while (inside_ptr != nullptr) {
+
+                level[level_offset + level_sz + nxt_level_sz] = inside_ptr->inside;
+                nxt_level_sz++;
+
+                if (hash->val == inside_ptr->tag_hash) {
+                    if (hash->next == nullptr) return inside_ptr;
+                    nxt_level_sz = 1;
+                    return  find_hlpr(hash->next); 
+                }
+
+                inside_ptr = inside_ptr->next;
             }
-
-            ptr = ptr->next;
         }
-
-        find_hlpr(hash,prnt->next->inside,prnt->next);/888888888888888888888888888888888*
+        return find_hlpr(hash);
     }
 
+    Tag* find_in_branch (Tag * branch_root, HashNode* hashNode) {
+        level[0] = branch_root;
+        level_sz = 0;
+        level_offset = 1;
+        nxt_level_sz = 1;
+
+        return find_hlpr(hashNode);
+    }
     Tag* find(HashLinkT hash_link) {
-        Tag* res = find_hlpr(hash_link.root,root,root);
+
+        Tag* res = find_in_branch(root,hash_link.root);
+       
+        if (!res) {
+            std::cerr << RED "Tag not found \n" RESET;
+            std::exit(EXIT_FAILURE);
+        }
         return res;
     }
 
 };
 
-
 struct TagWriter {
-
     FILE* file;
 
     char* dst;
@@ -201,7 +214,6 @@ struct TagWriter {
     }
 
     inline size_t write_by_range(int start, int end) {
-
         fseek(file, start, SEEK_SET);
         size_t sz_read = fread(pen, sizeof(char), end - start, file);
         pen += sz_read;
@@ -209,7 +221,6 @@ struct TagWriter {
     }
 
     void tag_tree_write(Tag* root) {
-        
         if (!root->is_writable) return;
 
         int st = root->cntnt_start;
@@ -217,7 +228,6 @@ struct TagWriter {
         Tag* inside = root->inside;
 
         while (inside != nullptr) {
-
             end = inside->opn_tg_strt;
             write_by_range(st, end);
             tag_tree_write(inside);
@@ -226,19 +236,17 @@ struct TagWriter {
         }
 
         write_by_range(st, root->cntnt_end);
-
     }
 };
 
-
-template <size_t sz, int N> struct ConstexprStr {
+template <size_t sz, int N> 
+struct ConstexprStr {
     static const int size = (sz + 1) * N;
     char data[size] = { ' ' };
-    hashT hashes[size] = {-1};
+    hashT hashes[size] = { -1 };
 
     constexpr ConstexprStr(const char* str) {
-        for (int i = 0; i < size; i++)
-            data[i] = ' ';
+        for (int i = 0; i < size; i++) data[i] = ' ';
 
         int indx = 0;
         int n = 0;
@@ -260,7 +268,7 @@ template <size_t sz, int N> struct ConstexprStr {
         }
 
         for (int i = 0; i < N; i++) {
-            hashes[i] = hash(operator[] (i));
+            hashes[i] = hash(operator[](i));
         }
     }
 
@@ -271,7 +279,7 @@ template <size_t sz, int N> struct ConstexprStr {
     bool has_at(char* str, int& indx) const {
         int i = 0;
         hashT str_h = hash(str);
-        for (; i < N;i++) {
+        for (; i < N; i++) {
             if (hashes[i] == str_h) return true;
         }
 
@@ -280,8 +288,8 @@ template <size_t sz, int N> struct ConstexprStr {
     }
 };
 
-
-template <int sz> struct CircularBuff {
+template <int sz>
+struct CircularBuff {
     int len = 0;
     char arr[sz + 1] = { ' ' };
 

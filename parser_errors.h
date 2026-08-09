@@ -77,3 +77,8 @@
 #define RAISE_INACTIVE_SHADER_ACCESS(shdr, name)                                \
     RAISE_PRINT_EXIT_NO_LINE((shdr) << " is not a active shader of " << (name))
 
+
+#define  RAISE_RECURSIVE_PASTING \
+std::cerr << "Recursive pasting detected\n"<<"Currnt tag: "<<currnt_tag->tag_name;\
+std::exit(EXIT_FAILURE);
+
