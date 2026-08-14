@@ -47,8 +47,16 @@ static int check_subtag(const char* sbtg_name) {
 }
 
 
+constexpr bool contains(char target, const char* str)
+{
+    for (int i = 0; str[i] != '\0'; ++i) {
+        if (str[i] == target)
+            return true;
+    }
+    return false;
+}
 
-template <int b_sz, int n> struct ShaderReader {
+template <int b_sz> struct ShaderReader {
 
     bool at_comnt = false;
     bool in_tag = false;
@@ -63,36 +71,35 @@ template <int b_sz, int n> struct ShaderReader {
     int ln_no = 1;
     int char_no = 0;
 
-    ShaderHandel handel[n];
     int mem_left = b_sz;
     int sz = 0;
     bool skip_newln = true;
 
-    ShaderHandel* curnt_element = handel;
     int curnt_indx = 0;
     FILE* file;
     long file_sz = 0;
     int depth = 0;
     TagTree<20, 5> tgtree;
 
-    Tag* currnt_tag = *tgtree.top;
+    Tag* currnt_tag = tgtree.top();
 
 
     void inscope() {
         Tag* new_tag = tgtree.make_tag();
-        tgtree->addNext(new_tg)
-            tgtree.addStack(new_tg);
-        currnt_tag = *tgtree.top; // should be same as new_tg
+        tgtree.addNext(new_tag);
+        tgtree.addStack(new_tag);
+        currnt_tag = tgtree.top(); // should be same as new_tg
+        bool v = currnt_tag == new_tag;
         depth++;
     }
 
     void outscope() {
         tgtree.pop();
-        currnt_tag = *tgtree.top;
+        currnt_tag = tgtree.top();
         depth--;
     }
 
-    hashT currnt_tag_hash() { currnt_tag->hash_lst.root->val; }
+    hashT currnt_tag_hash() { return currnt_tag->tag_hash; }
 
     char get_nxt() {
         int c = buffer[char_no];
@@ -112,10 +119,14 @@ template <int b_sz, int n> struct ShaderReader {
         char_no++;
         return c;
     }
+    char seek(int c_no) {
+        cursr = buffer[c_no];
+        char_no = c_no + 1;
+    }
 
     bool skip_whitespc() {
         bool hit_newln = false;
-        while ((cursr != EOF) && isspace(cursr)) {
+        while ((char_no > file_sz) && isspace(cursr)) {
             if (cursr == '\n') {
                 hit_newln = true;
             }
@@ -132,7 +143,7 @@ template <int b_sz, int n> struct ShaderReader {
     }
 
 
-    void cpy_tag_str(char* dst, bool expect_spc, char end_delim) {
+    char cpy_tag_str(char* dst, bool expect_spc, const char* end_delim) {
 
         if (skip_whitespc()) {
             RAISE_NO_NEWLINE_INSIDE_TAGS;
@@ -150,14 +161,12 @@ template <int b_sz, int n> struct ShaderReader {
 
         char temp_name[n_sz] = {};
 
-        while (cursr != end_delim) {
-
+        while (!contains(cursr ,end_delim)) {
             if (isspace(cursr)) {
-
                 if (!expect_spc)
                     break; // if space is not expected then break
                 skip_whitespc();
-                if (cursr = end_delim)
+                if (contains(cursr, end_delim))
                     break; //skip white space then check for end_delim if space is 
                 else {
                     RAISE_SHADER_NAME_HAS_WHITESPACE;
@@ -174,51 +183,55 @@ template <int b_sz, int n> struct ShaderReader {
             temp_name[t_name_indx++] = cursr;
             get_nxt();
         }
-
+        char end_char = cursr;
         get_nxt();
         strcpy(dst, temp_name);
         dst[t_name_indx + 1] = '\n';
+        return end_char;
     }
 
 
 
     void initiate_tag(bool expect_spc) {
 
-        char c = (expect_spc) ? '>' : ' ';
+        const char* c = (expect_spc) ? " " : ">";
         cpy_tag_str(currnt_tag->tag_name, expect_spc, c);
         currnt_tag->tag_hash = hash(currnt_tag->tag_name);
-        currnt_tag->cntnt_start = char_no;
+        currnt_tag->cntnt_start = char_no-1;
 
     }
 
     void parse_scope_tree(TagType type) {
 
-        while (cursr != '>') {
-            cpy_tag_str(currnt_tag->str_hash_lst(), true, ':');
-            skip_whitespc();
+        
+        while (true) {
+            char end = cpy_tag_str(currnt_tag->str_hash_lst(), true, ":>");
             currnt_tag->commit_hash();
+            if (end == '>') break;
         }
 
         if (type == TagType::Paste) {
             HashLinkT currnt_hash_link = currnt_tag->hash_lst;
             Tag* tg_found = tgtree.find(currnt_hash_link);
-            if (tgtree.find_in_branch(tg_found, (currnt_hash_lst.root))) {
+            if (tgtree.find_in_branch(tg_found, (currnt_hash_link.root))) {
                 RAISE_RECURSIVE_PASTING;
             }
             tgtree.addNext(tg_found);
         }
     }
 
-    void parse_end_tag() {
+    void parse_end_tag(int tag_start) {
         char cls_name[n_sz];
 
-        cpy_tag_str(cls_name, false, '>');
+        cpy_tag_str(cls_name, false, ">");
 
         bool is_same = currnt_tag_hash() == hash(cls_name);
         if (!is_same) RAISE_CLOSE_TAG_MISMATCH();
+
         currnt_tag->cntnt_end = tag_start;
-        currnt_tag->end_ln_no = start_ln;
+        currnt_tag->end_ln_no = ln_no;
         currnt_tag->cls_tg_end = char_no;
+        
         outscope();
     }
 
@@ -226,13 +239,16 @@ template <int b_sz, int n> struct ShaderReader {
         int tag_start = char_no - 1;
         int start_ln = ln_no;
 
-        bool is_cls = !skip_whitespc() && cursr == '/';
+        skip_whitespc();
+        get_nxt();
+        bool is_cls = cursr == '/';
 
         if (is_cls) {
-            parse_end_tag();
+            get_nxt();
+            parse_end_tag(tag_start);
             return is_cls;
         }
-        
+
         inscope(); // any tag created always gets us inscope and vice versa
 
         currnt_tag->opn_tg_strt = tag_start;
@@ -242,7 +258,8 @@ template <int b_sz, int n> struct ShaderReader {
         initiate_tag(expect_spc);
 
         char* first_str = currnt_tag->tag_name;
-        int indx = currnt_tag->init_Tag();
+
+        int indx = currnt_tag->init_Tag(depth);
 
         if (expect_spc) {
 
@@ -250,42 +267,57 @@ template <int b_sz, int n> struct ShaderReader {
                 RAISE_INVALID_TAG_NAME(currnt_tag->str());
             }
             parse_scope_tree((TagType)(indx));
-
         }
         return is_cls;
     }
 
     bool check_tag_syntax() {
-        int tag_start = char_no;
-        char tg_special_chars = "/:";
-        int  count[2];
-        int pos[2];
+        int  temp_char_no = char_no;
+        bool temp_in_comnt = at_comnt;
+        int  temp_ln_no = ln_no;
 
-        while (cursr != '>' && char_no > file_sz) {
+        char tg_special_chars[] = "/:";
+        int  count[2] = {0};
+        int pos[2] = {0};
+
+        bool is_tag = true;
+        while (get_nxt() != '>' && char_no < file_sz) {
+
             if (!isalnum(cursr)) {
-                if (cursr == '/') {
-                    if (!count[0]++) return false;
-                }
-                else if (cursr == ':') {
-                    if (!count[1]++) {
-                        pos[1]++;
+                
+                int i = 0;
+                for (i = 0; tg_special_chars[i] !=cursr && i<2; i++);
+
+                if (count[i] == 0) pos[i]++;
+                else {
+                    if (i == 0) {
+                        is_tag = false;
+                        break;
                     }
                 }
-                else return false;
+                count[i]++;
             }
         }
-        if (pos[0] > pos[1]) return false;
-        return true;
+
+        if (pos[0] > pos[1] && count[1]>0) is_tag = false;
+
+        char_no = temp_char_no-1;
+        get_nxt();
+        cursr;
+        at_comnt = temp_in_comnt;
+        ln_no = temp_ln_no;
+        
+
+        return is_tag;
     }
 
     void content_loop() {
-        while ((cursr != '<' && !at_comnt) && char_no>file_sz)
-            get_nxt();
+        while ((get_nxt() != '<' && !at_comnt) && char_no < file_sz);
         if (check_tag_syntax()) parse_tag();
         content_loop();
     }
 
-
+    
     FILE* open_file(const char* file_name) {
         FILE* file = fopen(file_name, "r");
         if (!file) {
@@ -301,34 +333,22 @@ template <int b_sz, int n> struct ShaderReader {
         file = open_file(file_name);
         fseek(file, 0, SEEK_END);
         file_sz = ftell(file);
-
-        if (file_sz >= b_sz) {
-            RAISE_INSUFFICIENT_SPACE;
-        }
+        fseek(file, 0, SEEK_SET);
+        if ( file_sz >= b_sz) RAISE_INSUFFICIENT_SPACE;
 
         fread(buffer, sizeof(char), file_sz, file);
+        content_loop();
         fclose(file);
-
-        for (int shader_indx = 0; shader_indx < n; shader_indx++) {
-            skip_whitespc();
-            if (char_no >= file_sz) {
-                RAISE_MISSING_SHADERS(handel[shader_indx].name, shader_indx);
-            }
-            read_element();
-            curnt_element++;
-            curnt_indx++;
-
-        }
-
-
     }
 
 };
 
 
 int main() {
- 
 
+    ShaderReader<2000> reader ("shaders.h");
+
+    
 
 }
 

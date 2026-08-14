@@ -7,11 +7,25 @@ constexpr int n_sz = 20;
 #define RESET "\x1b[0m"
 
 
+using  hashT = unsigned long int;
+
+constexpr hashT hash(const char* str, int n = 0) {
+    hashT hash = 0;
+    int k = 0;
+    while (str[k] != '\0') {
+        int i = n + k;
+        hash += (hashT)(str[i]) * (2 << (i % 17));
+        k++;
+    }
+    return hash;
+
+}
+
 template <size_t sz, int N>
 struct ConstexprStr {
     static const int size = (sz + 1) * N;
     char data[size] = { ' ' };
-    hashT hashes[size] = { -1 };
+    hashT hashes[size] = { 1 };
 
     constexpr ConstexprStr(const char* str) {
         for (int i = 0; i < size; i++) data[i] = ' ';
@@ -45,14 +59,18 @@ struct ConstexprStr {
     }
 
     bool has_at(char* str, int& indx) const {
+        bool found = false;
         int i = 0;
         hashT str_h = hash(str);
         for (; i < N; i++) {
-            if (hashes[i] == str_h) return true;
+            if (hashes[i] == str_h) {
+                found = true;
+                break;
+            }
         }
 
         indx = i;
-        return false;
+        return found;
     }
 };
 
@@ -64,27 +82,19 @@ constexpr ConstexprStr <n_sz, stage_count>
 subtag_names{ "vertex,fragment,tess_control,tess_eval,geometry,compute," };
 
 constexpr int cammnds = 3;
-constexpr ConstexprStr<n_sz, cammnds>
-cammnd_tags{ "copy,paste,scope" };
+constexpr ConstexprStr<n_sz, cammnds> 
+cammnd_tags{ "copy,paste,scope," };
 
-constexpr ConstexprStr <n_sz, stage_count + cammnds>
-all_names{ "vertex,fragment,tess_control,tess_eval,geometry,compute,copy,paste,scope" };
+constexpr ConstexprStr <n_sz, stage_count + cammnds> 
+all_names{ "vertex,fragment,tess_control,tess_eval,geometry,compute,copy,paste,scope," };
 
 
 
-using hashT = unsigned int;
 
-constexpr hashT hash(const char* str, int n = 0) {
-    hashT hash = 0;
-    int k = 0;
-    while (str[k] != '\0') {
-        int i = n + k;
-        hash += (hashT)(str[i]) * (2 << (i % 17));
-        k++;
-    }
-    return hash;
-}
-bool hash_compare(char* str1, char* str2) { return hash(str1) == hash(str2); }
+
+
+bool hash_compare(char* str1, char* str2) { return hash(str1) == hash(str2) ; }
+
 template <typename T, int sz>
 struct MemPool {
     int len = 0;
@@ -95,8 +105,10 @@ struct MemPool {
             std::cerr << "Mem pool memory overflow\n";
             exit(EXIT_FAILURE);
         }
-        return mem + len;
+        int len_temp = len;
         len++;
+        return mem + len_temp;
+        
     }
 };
 
@@ -121,13 +133,12 @@ enum class TagType : int {
 template <typename T>
 struct Linked {
     using NodeT = Node<T>;
-    NodeT* root;
-    NodeT* end = root;
-
+    NodeT* root = nullptr;
     
     void add(NodeT* nxt_ptr) {
-        end->next = nxt_ptr;
-        end = end->next;
+        NodeT* ptr = root;
+        while (ptr != nullptr) ptr = ptr->next;
+        ptr = nxt_ptr;
     }
 };
 
@@ -145,12 +156,13 @@ struct Tag {
     int cls_tg_end;
     int end_ln_no;
     bool is_writable = false;
-    char name_buff[n_sz];
+    char name_buff[n_sz] = {' '};
     char tag_name[n_sz];
     hashT tag_hash;
     Tag* next = nullptr;
     Tag* inside = nullptr;
     TagType type;
+    bool is_init = false;
 
     Tag() {}
 
@@ -158,23 +170,27 @@ struct Tag {
 
         if (depth > 1) is_writable = true;
         int type_indx;
-        if (!all_names.has_at(name_buff, type_indx) && depth > 1) {
-            RAISE_INVALID_TAG_NAME(name_buff);
+        if (!all_names.has_at(tag_name, type_indx) && depth > 1) {
+            RAISE_INVALID_TAG_NAME(tag_name);
         }
+        is_init = true;
         return type_indx;
     }
 
 
     char* str_hash_lst() { return name_buff; }
-
     char* str() { return name_buff; }
 
     void commit_hash() {
-        hash_lst.add(hash_pool.request_mem());
-        hash_lst.end->val = hash(name_buff);
+        HashNode* ptr = hash_pool.request_mem();
+        ptr->val = hash(name_buff);
+        hash_lst.add(ptr);
     }
-    bool compare(const char* cstr) { return hash_compare(str(), (char*)cstr); }
+ 
+
 };
+
+MemPool<HashNode, 100> Tag::hash_pool;
 
 template <int sz, int max_copy_depth>
 struct TagTree {
@@ -182,9 +198,9 @@ struct TagTree {
     Tag root_obj;
     Tag* root = arr;
     Tag* curnt = root;
-    Tag** top;
 
-    Tag stack[max_copy_depth];
+    Tag* stack[max_copy_depth];
+    
     int stk_len = 0;
 
     Tag* level[sz];
@@ -192,14 +208,17 @@ struct TagTree {
     int level_sz = 0;
     int nxt_level_sz = 0;
 
-    TagTree() {}
+    TagTree() {
+        stack[0] = arr;
+    }
 
     int len = 1;
 
     void update_top(int x) {
-        *top = (arr + x);
         stk_len = x;
     }
+
+    Tag* top() { return stack[stk_len]; }
 
     Tag* make_tag() { // gets memory 
         if (len >= sz) {
@@ -214,20 +233,22 @@ struct TagTree {
     
     void addNext(Tag* nxt) { // add to next to current_scope
 
-        Tag* ptr = *top;
-        while (ptr != nullptr) ptr = ptr->next;
-        ptr = nxt;
+        Tag* ptr = top();
+        arr;
+        while (ptr -> next) ptr = ptr->next;
+        ptr->next = nxt;
 
     }
 
     void pop() { update_top(stk_len - 1); }
 
     void addStack(Tag * ptr) { // just adds into stack whatever ptr is passed
+
         if (stk_len  >= max_copy_depth)
             std::cerr << RED "Max stack length reached\n" RESET;
         else {
             update_top(stk_len + 1);
-            *top = ptr;
+            stack[stk_len] = ptr;
         }
     }
 
