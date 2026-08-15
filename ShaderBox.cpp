@@ -81,26 +81,27 @@ template <int b_sz> struct ShaderReader {
     int depth = 0;
     TagTree<50, 10> tgtree;
 
-    Tag currnt_tag ;
+    Tag* currnt_tag = tgtree.top();
 
 
     void inscope() {
         Tag* old_scope = tgtree.top();
-        *old_scope = currnt_tag;
         Tag* new_tag = tgtree.make_tag();
-        currnt_tag = Tag{};
+
         old_scope->addInside(new_tag);
         tgtree.addStack(new_tag);
+        currnt_tag = tgtree.top(); // should be same as new_tg
+        bool v = currnt_tag == new_tag;
         depth++;
     }
 
     void outscope() {
-        *tgtree.top() = currnt_tag;
         tgtree.pop();
+        currnt_tag = tgtree.top();
         depth--;
     }
 
-    hashT currnt_tag_hash() { return currnt_tag.tag_hash; }
+    hashT currnt_tag_hash() { return currnt_tag->tag_hash; }
 
     char get_nxt() {
         int c = buffer[char_no];
@@ -196,46 +197,53 @@ template <int b_sz> struct ShaderReader {
     void initiate_tag(bool expect_spc) {
 
         const char* c = (expect_spc) ? " " : ">";
-        cpy_tag_str(currnt_tag.tag_name, expect_spc, c);
-        currnt_tag.tag_hash = hash(currnt_tag.tag_name);
-        currnt_tag.cntnt_start = char_no-1;
+        cpy_tag_str(currnt_tag->buffer, expect_spc, c);
+        currnt_tag->commit_hash();
+        currnt_tag->commit_name();
+        currnt_tag->cntnt_start = char_no-1;
 
     }
 
-    void parse_scope_tree(TagType type) {
+    void parse_scope_tree() {
 
         while (true) {
-            char end = cpy_tag_str(currnt_tag.str_hash_lst(), true, ":>");
-            currnt_tag.commit_hash();
+            char end = cpy_tag_str(currnt_tag->buffer, true, ":>");
+            currnt_tag->append_hash_lnk();
             if (end == '>') break;
         }
 
-        if (type == TagType::Paste) {
-            HashLinkT currnt_hash_link = currnt_tag.hash_lst;
-            Tag* tg_found = tgtree.find(currnt_hash_link);
-            if (tgtree.find_in_branch(tg_found, (currnt_hash_link.root))) {
-                RAISE_RECURSIVE_PASTING;
-            }
-            currnt_tag.addInside(tg_found);
-            content_loop();
+
+        HashLinkT currnt_hash_link = currnt_tag->hash_lst;
+        Tag* tg_found = tgtree.find(currnt_hash_link);
+        if (tgtree.find_in_branch(tg_found->inside, (currnt_hash_link.end))) {
+            RAISE_RECURSIVE_PASTING;
         }
+        currnt_tag->addInside(tg_found);
+        outscope();
+        content_loop();
+        
     }
 
     void parse_end_tag(int tag_start) {
-        char cls_name[n_sz];
 
-        cpy_tag_str(cls_name, false, ">");
+        cpy_tag_str(currnt_tag->buffer, false, ">");
+        
+        currnt_tag->check_end_same(char_no,ln_no);
 
-        bool is_same = currnt_tag_hash() == hash(cls_name);
-        if (!is_same) RAISE_CLOSE_TAG_MISMATCH();
-
-        currnt_tag.cntnt_end = tag_start;
-        currnt_tag.end_ln_no = ln_no;
-        currnt_tag.cls_tg_end = char_no;
+        currnt_tag->cntnt_end = tag_start;
+        currnt_tag->end_ln_no = ln_no;
+        currnt_tag->cls_tg_end = char_no;
         
         outscope();
     }
 
+    void name_override() {
+
+        cpy_tag_str(currnt_tag->buffer, false, ">");
+        currnt_tag->commit_hash();
+
+    }
+    
     bool parse_tag() {
         int tag_start = char_no - 1;
         int start_ln = ln_no;
@@ -251,22 +259,22 @@ template <int b_sz> struct ShaderReader {
 
         inscope(); // any tag created always gets us inscope and vice versa
 
-        currnt_tag.opn_tg_strt = tag_start;
+        currnt_tag->opn_tg_strt = tag_start;
         bool in_cntnt = depth > 2;
         bool expect_spc = (is_cls ^ in_cntnt) && in_cntnt;
 
         initiate_tag(expect_spc);
-
-        char* first_str = currnt_tag.tag_name;
-
-        int indx = currnt_tag.init_Tag(depth);
+        char* first_str = currnt_tag->tag_name;
+        int indx = currnt_tag->init_Tag(depth);
 
         if (expect_spc) {
-
+           
             if (indx < (int)(TagType::Copy)) {
-                RAISE_INVALID_TAG_NAME(currnt_tag.str());
+                RAISE_INVALID_TAG_NAME(currnt_tag->tag_name);
             }
-            parse_scope_tree((TagType)(indx));
+            TagType type = (TagType)indx; 
+            if (type == TagType::Paste) parse_scope_tree();
+            if (type == TagType::Copy) name_override();
         }
         return is_cls;
     }
@@ -319,10 +327,14 @@ template <int b_sz> struct ShaderReader {
 
         return is_tag;
     }
+    
+    void loop() {
+        while ((cursr != '<' && !at_comnt) && cursr != '\0')
+            get_nxt();
+    }
 
     void content_loop() {
-        while ((cursr != '<' && !at_comnt) && cursr!='\0')
-            get_nxt();
+        loop();
         if (cursr == '\0') return;
         if (check_tag_syntax()) parse_tag();
         content_loop();
@@ -348,8 +360,8 @@ template <int b_sz> struct ShaderReader {
         if ( file_sz >= b_sz) RAISE_INSUFFICIENT_SPACE;
 
         fread(buffer, sizeof(char), file_sz, file);
-        strcpy(currnt_tag.tag_name,file_name);
-        currnt_tag.commit_hash();
+        strcpy(currnt_tag->tag_name,file_name);
+        currnt_tag->append_hash_lnk();
         get_nxt();
         content_loop();
         fclose(file);

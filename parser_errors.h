@@ -51,8 +51,8 @@
                      << (l2) << ")")
 
 #define RAISE_CLOSE_TAG_MISMATCH()                                              \
-    RAISE_PRINT_EXIT("Close tag subtag name:"                                   \
-                     << " does not match with open tag name"  << "\n")
+    RAISE_PRINT_EXIT("Close tag subtag name:"<<tag_name                                   \
+                     << " does not match with open tag name"<<buffer  << "\n")
 
 #define RAISE_INSUFFICIENT_SPACE                                                \
     RAISE_PRINT_EXIT("INSUFFICIENT SPACE \n")
@@ -79,6 +79,6 @@
 
 
 #define  RAISE_RECURSIVE_PASTING \
-std::cerr << "Recursive pasting detected\n"<<"Currnt tag: "<<currnt_tag.tag_name;\
+std::cerr << "Recursive pasting detected\n"<<"Currnt tag: "<<currnt_tag->tag_name;\
 std::exit(EXIT_FAILURE);
 

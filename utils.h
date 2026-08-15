@@ -142,14 +142,15 @@ template <typename T>
 struct Linked {
     using NodeT = Node<T>;
     NodeT* root = nullptr;
-    
+    NodeT* end =  nullptr;
     void add(NodeT* nxt_ptr) {
         if (!root)  root = nxt_ptr;
         else {
             NodeT* ptr = root;
-            while (ptr != nullptr) ptr = ptr->next;
-            ptr = nxt_ptr;
+            while (ptr->next != nullptr) ptr = ptr->next;
+            ptr->next = nxt_ptr;
         }
+        end = nxt_ptr;
     }
 };
 
@@ -168,7 +169,7 @@ struct Tag {
     int cls_tg_end;
     int end_ln_no;
     bool is_writable = false;
-    char name_buff[n_sz] = {' '};
+    char buffer[n_sz] = {' '};
     char tag_name[n_sz]= "new_tag";
     hashT tag_hash;
     Tag* next = nullptr;
@@ -191,15 +192,27 @@ struct Tag {
     }
 
 
-    char* str_hash_lst() { return name_buff; }
-    char* str() { return name_buff; }
+    void commit_name() { 
+        strcpy(tag_name,buffer);
+    }
 
     void commit_hash() {
+        tag_hash = hash(buffer);
+    }
+    
+    void check_end_same(int ln_no , int char_no) {
+
+        bool is_same = hash(buffer) == hash(tag_name);
+        if (!is_same) RAISE_CLOSE_TAG_MISMATCH();
+
+    }
+    
+    void append_hash_lnk() {
         if (tag_no == 7) {
             int c = counter;
         }
         HashNode* ptr = hash_pool.request_mem();
-        ptr->val = hash(name_buff);
+        ptr->val = hash(buffer);
         hash_lst.add(ptr);
     }
  
@@ -215,6 +228,7 @@ struct Tag {
     }
 
 };
+
 int Tag::counter = 0;
 MemPool<HashNode, 100> Tag::hash_pool;
 
@@ -273,13 +287,16 @@ struct TagTree {
         nxt_level_sz = 0;
 
         for (int i = 0; i < level_sz; i++) {
-
             Tag* inside_ptr = level[i + level_offset];
             while (inside_ptr != nullptr) {
+                
+                if (inside_ptr->type == TagType::Paste) continue;
+
                 if (inside_ptr->inside) {
                     level[level_offset + level_sz + nxt_level_sz] = inside_ptr->inside;
                     nxt_level_sz++;
                 }
+
                 if (hash->val == inside_ptr->tag_hash) {
                     if (hash->next == nullptr) return inside_ptr;
                     nxt_level_sz = 1;
@@ -289,6 +306,7 @@ struct TagTree {
                 inside_ptr = inside_ptr->next;
             }
         }
+        if (nxt_level_sz == 0) return nullptr;
         return find_hlpr(hash);
     }
 
