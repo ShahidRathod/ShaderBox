@@ -1,6 +1,4 @@
-<surface>
-
-	<vertex>
+<surface><vertex>
 
 #version 330 core
 layout(location = 0) in vec3 coords;
@@ -24,7 +22,7 @@ float gauss(float x)
     return exp(-x);
 }
 
-<copy spiral>
+<copy spiral:float>
 float spiral_y(vec3 p) {
 
     float r = length(p.xz);
