@@ -130,15 +130,26 @@ enum class TagType : int {
     Scope
 };
 
+enum class OpenClose : int { Open , Close };
+struct TagInfo {
+    TagType type;
+    OpenClose opncls; 
+    bool is_tag;
+};
+
+
 template <typename T>
 struct Linked {
     using NodeT = Node<T>;
     NodeT* root = nullptr;
     
     void add(NodeT* nxt_ptr) {
-        NodeT* ptr = root;
-        while (ptr != nullptr) ptr = ptr->next;
-        ptr = nxt_ptr;
+        if (!root)  root = nxt_ptr;
+        else {
+            NodeT* ptr = root;
+            while (ptr != nullptr) ptr = ptr->next;
+            ptr = nxt_ptr;
+        }
     }
 };
 
@@ -146,9 +157,10 @@ using HashLinkT = Linked<hashT>;
 using HashNode = Node<hashT>;
 
 struct Tag {
+    static int counter ;
     HashLinkT hash_lst;
     static MemPool<HashNode, 100> hash_pool;
-
+    int tag_no;
     int start_ln_no;
     int opn_tg_strt;
     int cntnt_start;
@@ -157,17 +169,18 @@ struct Tag {
     int end_ln_no;
     bool is_writable = false;
     char name_buff[n_sz] = {' '};
-    char tag_name[n_sz];
+    char tag_name[n_sz]= "new_tag";
     hashT tag_hash;
     Tag* next = nullptr;
     Tag* inside = nullptr;
     TagType type;
     bool is_init = false;
 
-    Tag() {}
+    Tag() {  
+        tag_no = counter++;
+    }
 
     int init_Tag(int depth) { // assumes the tag_name is already written
-
         if (depth > 1) is_writable = true;
         int type_indx;
         if (!all_names.has_at(tag_name, type_indx) && depth > 1) {
@@ -182,14 +195,27 @@ struct Tag {
     char* str() { return name_buff; }
 
     void commit_hash() {
+        if (tag_no == 7) {
+            int c = counter;
+        }
         HashNode* ptr = hash_pool.request_mem();
         ptr->val = hash(name_buff);
         hash_lst.add(ptr);
     }
  
+    void addInside(Tag* nxt) { // add to next to current_scope
+        
+        if (!inside) inside = nxt;
+        else {
+            Tag* ptr = inside; // ptr by reference
+            while (ptr->next) ptr = ptr->next;
+            ptr->next = nxt;
+        }
+
+    }
 
 };
-
+int Tag::counter = 0;
 MemPool<HashNode, 100> Tag::hash_pool;
 
 template <int sz, int max_copy_depth>
@@ -214,10 +240,6 @@ struct TagTree {
 
     int len = 1;
 
-    void update_top(int x) {
-        stk_len = x;
-    }
-
     Tag* top() { return stack[stk_len]; }
 
     Tag* make_tag() { // gets memory 
@@ -231,23 +253,15 @@ struct TagTree {
         return new_tg;
     }
     
-    void addNext(Tag* nxt) { // add to next to current_scope
 
-        Tag* ptr = top();
-        arr;
-        while (ptr -> next) ptr = ptr->next;
-        ptr->next = nxt;
-
-    }
-
-    void pop() { update_top(stk_len - 1); }
+    void pop() { stk_len-- ; }
 
     void addStack(Tag * ptr) { // just adds into stack whatever ptr is passed
 
         if (stk_len  >= max_copy_depth)
             std::cerr << RED "Max stack length reached\n" RESET;
         else {
-            update_top(stk_len + 1);
+            stk_len++;
             stack[stk_len] = ptr;
         }
     }
@@ -262,10 +276,10 @@ struct TagTree {
 
             Tag* inside_ptr = level[i + level_offset];
             while (inside_ptr != nullptr) {
-
-                level[level_offset + level_sz + nxt_level_sz] = inside_ptr->inside;
-                nxt_level_sz++;
-
+                if (inside_ptr->inside) {
+                    level[level_offset + level_sz + nxt_level_sz] = inside_ptr->inside;
+                    nxt_level_sz++;
+                }
                 if (hash->val == inside_ptr->tag_hash) {
                     if (hash->next == nullptr) return inside_ptr;
                     nxt_level_sz = 1;
@@ -281,7 +295,7 @@ struct TagTree {
     Tag* find_in_branch (Tag * branch_root, HashNode* hashNode) {
         level[0] = branch_root;
         level_sz = 0;
-        level_offset = 1;
+        level_offset = 0;
         nxt_level_sz = 1;
 
         return find_hlpr(hashNode);

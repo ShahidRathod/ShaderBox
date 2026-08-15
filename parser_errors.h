@@ -5,8 +5,8 @@
 
 #define RAISE_PRINT_EXIT(MSG)                                                  \
     do {                                                                       \
-        std::cerr << RED "Shader Loader Error LINE NO:(" << ln_no              \
-                  << "):" << char_no << " " << MSG << RESET;                   \
+        std::cerr << RED "Shader Loader Error LINE NO: " << ln_no              \
+                  << "  Char No: " << char_no << "\n " << MSG << RESET;                   \
         std::exit(EXIT_FAILURE);                                               \
     } while (0)
 
@@ -34,7 +34,7 @@
 #define RAISE_SHADER_NAME_HAS_WHITESPACE                                        \
     RAISE_PRINT_EXIT("Shader name has whitespace in between\n")
 
-#define RAISE_SHADER_NAME_TOO_LONG(name_buf_sz, temp_name)                      \
+#define RAISE_SHADER_NAME_TOO_LONG(name_buf_sz, temp_name)                     \
     RAISE_PRINT_EXIT("Shader name exceeds the name buffer size"                \
                      << (name_buf_sz) << " name= " << (temp_name) << "\n")
 
@@ -42,16 +42,16 @@
     RAISE_PRINT_EXIT("Shader has very special character in between: " << (c) << "\n")
 
 #define RAISE_ELEMENT_TAG_MISMATCH(open_name, close_name, idx)                  \
-    RAISE_PRINT_EXIT("Element(" << (idx) << "): open tag-" << (open_name)      \
+    RAISE_PRINT_EXIT("Element(" << (idx) << "): open tag-" << (open_name)       \
                      << " does not match close tag-" << (close_name))
 
-#define RAISE_SHADER_ALREADY_DEFINED(shdr_name, l1, l2)                              \
-    RAISE_PRINT_EXIT("Shader: " << (shdr_name) << " Element: " << curnt_element->name \
-                     << " is already defined line at (" << (l1) << ", "        \
+#define RAISE_SHADER_ALREADY_DEFINED(shdr_name, l1, l2)                                 \
+    RAISE_PRINT_EXIT("Shader: " << (shdr_name) << " Element: " << curnt_element->name   \
+                     << " is already defined line at (" << (l1) << ", "                 \
                      << (l2) << ")")
 
-#define RAISE_CLOSE_TAG_MISMATCH()                         \
-    RAISE_PRINT_EXIT("Close tag subtag name:"                   \
+#define RAISE_CLOSE_TAG_MISMATCH()                                              \
+    RAISE_PRINT_EXIT("Close tag subtag name:"                                   \
                      << " does not match with open tag name"  << "\n")
 
 #define RAISE_INSUFFICIENT_SPACE                                                \
@@ -79,6 +79,6 @@
 
 
 #define  RAISE_RECURSIVE_PASTING \
-std::cerr << "Recursive pasting detected\n"<<"Currnt tag: "<<currnt_tag->tag_name;\
+std::cerr << "Recursive pasting detected\n"<<"Currnt tag: "<<currnt_tag.tag_name;\
 std::exit(EXIT_FAILURE);
 
