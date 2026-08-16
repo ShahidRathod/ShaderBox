@@ -243,10 +243,13 @@ struct TagTree {
     
     int stk_len = 0;
 
+
     Tag* level[sz];
     int level_offset = 0;
     int level_sz = 0;
     int nxt_level_sz = 0;
+    int index = 0;
+
 
     TagTree() {
         stack[0] = arr;
@@ -280,34 +283,47 @@ struct TagTree {
         }
     }
 
-    Tag* find_hlpr(HashNode* hash) {
+    void add_nxt_layer(Tag* inside_ptr) {
+    
+        if (inside_ptr->inside) {
+            level[level_offset + level_sz + nxt_level_sz] = inside_ptr->inside;
+            nxt_level_sz++;
+        }
+    }
 
-        level_offset += level_sz;
-        level_sz = nxt_level_sz;
-        nxt_level_sz = 0;
+    Tag* nxt_tag_on_layer() {
+        if (index >= level_sz) {
+            level_offset += level_sz;
+            level_sz = nxt_level_sz;
+            nxt_level_sz = 0;
+        }
+        else {
+            index++;
+        }
+        return level[index + level_offset];
+    }
 
-        for (int i = 0; i < level_sz; i++) {
-            Tag* inside_ptr = level[i + level_offset];
+    Tag* find_hlpr(HashNode* hash ,int cntn_len = 0) {
+
+        while (level_sz != 0) {
+
+            Tag* inside_ptr = nxt_tag_on_layer();
+
             while (inside_ptr != nullptr) {
-                
+
                 if (inside_ptr->type == TagType::Paste) continue;
 
-                if (inside_ptr->inside) {
-                    level[level_offset + level_sz + nxt_level_sz] = inside_ptr->inside;
-                    nxt_level_sz++;
-                }
-
+                add_nxt_layer(inside_ptr);
+                
                 if (hash->val == inside_ptr->tag_hash) {
                     if (hash->next == nullptr) return inside_ptr;
                     nxt_level_sz = 1;
-                    return  find_hlpr(hash->next); 
+                    return  find_hlpr(hash->next);
                 }
-
                 inside_ptr = inside_ptr->next;
             }
         }
-        if (nxt_level_sz == 0) return nullptr;
-        return find_hlpr(hash);
+        return nullptr;
     }
 
     Tag* find_in_branch (Tag * branch_root, HashNode* hashNode) {
@@ -318,10 +334,13 @@ struct TagTree {
 
         return find_hlpr(hashNode);
     }
+
+  
+    
     Tag* find(HashLinkT hash_link) {
 
         Tag* res = find_in_branch(root,hash_link.root);
-       
+
         if (!res) {
             std::cerr << RED "Tag not found \n" RESET;
             std::exit(EXIT_FAILURE);
@@ -329,6 +348,9 @@ struct TagTree {
         return res;
     }
 
+    int give_cntnt_len(Tag* tg, int len) {
+
+    }
 };
 
 struct TagWriter {
@@ -394,3 +416,5 @@ struct CircularBuff {
         return is_equal;
     }
 };
+
+

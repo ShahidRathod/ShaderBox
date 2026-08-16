@@ -21,12 +21,6 @@ enum class Space : int {
 };
 
 
-struct ShaderHandel {
-    char  name[n_sz] = {};
-    int   active_shaders[stage_count] = { 0 };
-    char* operator[](const char* shdr);
-};
-
 static int check_subtag(const char* sbtg_name) {
     bool found = false;
 
@@ -56,6 +50,25 @@ constexpr bool contains(char target, const char* str)
     return false;
 }
 
+int GLshader_to_index(GLenum enm) {
+    switch (enm) {
+    case GL_VERTEX_SHADER:           return 0;
+    case GL_FRAGMENT_SHADER:         return 1;
+    case GL_TESS_CONTROL_SHADER:     return 2;
+    case GL_TESS_EVALUATION_SHADER:  return 3;
+    case GL_GEOMETRY_SHADER:         return 4;
+    case GL_COMPUTE_SHADER:          return 5;
+
+    default: return -1;
+    }
+}
+
+struct CompiledShaders {
+    GLuint shaders[stage_count];
+
+
+};
+
 template <int b_sz> struct ShaderReader {
 
     bool at_comnt = false;
@@ -63,7 +76,7 @@ template <int b_sz> struct ShaderReader {
     char cursr = 0;
     static constexpr int delim_len = 2 * n_sz;
 
-    CircularBuff<delim_len> delim_tkn;
+    
     char buffer[b_sz] = {};
 
     char* write_ptr = buffer;
@@ -80,6 +93,8 @@ template <int b_sz> struct ShaderReader {
     long file_sz = 0;
     int depth = 0;
     TagTree<50, 10> tgtree;
+
+    int   active_shaders[stage_count] = { 0 };
 
     Tag* currnt_tag = tgtree.top();
 
@@ -360,13 +375,25 @@ template <int b_sz> struct ShaderReader {
         if ( file_sz >= b_sz) RAISE_INSUFFICIENT_SPACE;
 
         fread(buffer, sizeof(char), file_sz, file);
+        
+        fclose(file);
+
         strcpy(currnt_tag->tag_name,file_name);
         currnt_tag->append_hash_lnk();
+
         get_nxt();
         content_loop();
-        fclose(file);
+        
     }
 
+
+    int compile_shader(GLenum enm) {
+        int index = GLshader_to_index(enm);
+        HashNode node;
+        node.val = all_names.hashes[index];
+
+        tgtree.find_in_branch(tgtree.root, &node);
+    }
 };
 
 
