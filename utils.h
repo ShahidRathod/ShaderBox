@@ -180,7 +180,7 @@ struct Tag {
     Tag() {  
         tag_no = counter++;
     }
-
+    int cntn_len() { return cntnt_start - cntnt_end; }
     int init_Tag(int depth) { // assumes the tag_name is already written
         if (depth > 1) is_writable = true;
         int type_indx;
@@ -245,11 +245,11 @@ struct TagTree {
 
 
     Tag* level[sz];
+
     int level_offset = 0;
     int level_sz = 0;
     int nxt_level_sz = 0;
     int index = 0;
-
 
     TagTree() {
         stack[0] = arr;
@@ -292,33 +292,30 @@ struct TagTree {
     }
 
     Tag* nxt_tag_on_layer() {
-        if (index >= level_sz) {
+        Tag* res = level[index + level_offset];
+        index++;
+        if (index > level_sz) {
             level_offset += level_sz;
             level_sz = nxt_level_sz;
             nxt_level_sz = 0;
+            index = 0;
         }
-        else {
-            index++;
-        }
-        return level[index + level_offset];
+        return res;
     }
 
     Tag* find_hlpr(HashNode* hash ,int cntn_len = 0) {
 
         while (level_sz != 0) {
-
             Tag* inside_ptr = nxt_tag_on_layer();
-
             while (inside_ptr != nullptr) {
 
                 if (inside_ptr->type == TagType::Paste) continue;
-
                 add_nxt_layer(inside_ptr);
-                
+
                 if (hash->val == inside_ptr->tag_hash) {
                     if (hash->next == nullptr) return inside_ptr;
                     nxt_level_sz = 1;
-                    return  find_hlpr(hash->next);
+                    break;
                 }
                 inside_ptr = inside_ptr->next;
             }
@@ -328,10 +325,9 @@ struct TagTree {
 
     Tag* find_in_branch (Tag * branch_root, HashNode* hashNode) {
         level[0] = branch_root;
-        level_sz = 0;
+        level_sz = 1;
         level_offset = 0;
-        nxt_level_sz = 1;
-
+        nxt_level_sz = 0;
         return find_hlpr(hashNode);
     }
 
@@ -348,27 +344,42 @@ struct TagTree {
         return res;
     }
 
-    int give_cntnt_len(Tag* tg, int len) {
+    int cntn_len(Tag* tag) {
+        level[0] = tag;
+        level_sz = 1;
+        level_offset = 0;
+        nxt_level_sz = 0;
 
+        int cntn = 0;
+        int tag_end, tag_start;
+
+        while (level_sz != 0) {
+            Tag* inside_ptr = nxt_tag_on_layer();
+            while (inside_ptr != nullptr) {
+                tag_end = inside_ptr->cls_tg_end;
+                add_nxt_layer(inside_ptr);
+                if (!inside_ptr->inside) cntn += inside_ptr->cntn_len();
+                inside_ptr = inside_ptr->next;
+            }
+        }
     }
 };
 
 struct TagWriter {
-    FILE* file;
-
+    char* src;
     char* dst;
     char* pen;
 
-    TagWriter(FILE* fl, char* d) {
-        file = fl;
+    TagWriter(char* fl, char* d) {
+        src = fl;
         pen = dst = d;
     }
 
     inline size_t write_by_range(int start, int end) {
-        fseek(file, start, SEEK_SET);
-        size_t sz_read = fread(pen, sizeof(char), end - start, file);
-        pen += sz_read;
-        return sz_read;
+        int len = start - end;
+        memcpy(pen,src+start,len);
+        pen += len;
+        return len;
     }
 
     void tag_tree_write(Tag* root) {

@@ -8,6 +8,32 @@
 #include <iostream>
 #include "utils.h"
 
+using GLuint = unsigned int;
+using GLenum = unsigned int;
+
+enum {
+    GL_VERTEX_SHADER = 0x8B31,
+    GL_FRAGMENT_SHADER = 0x8B30,
+    GL_TESS_CONTROL_SHADER = 0x8E88,
+    GL_TESS_EVALUATION_SHADER = 0x8E87,
+    GL_GEOMETRY_SHADER = 0x8DD9,
+    GL_COMPUTE_SHADER = 0x91B9
+};
+
+int GLshader_to_index(GLenum enm)
+{
+    switch (enm) {
+    case GL_VERTEX_SHADER:          return 0;
+    case GL_FRAGMENT_SHADER:        return 1;
+    case GL_TESS_CONTROL_SHADER:    return 2;
+    case GL_TESS_EVALUATION_SHADER: return 3;
+    case GL_GEOMETRY_SHADER:        return 4;
+    case GL_COMPUTE_SHADER:         return 5;
+
+    default: return -1;
+    }
+}
+GLuint gl_compile_shader(GLenum type, const char* src) {}
 
 using std::cerr;
 using std::cout;
@@ -50,23 +76,11 @@ constexpr bool contains(char target, const char* str)
     return false;
 }
 
-int GLshader_to_index(GLenum enm) {
-    switch (enm) {
-    case GL_VERTEX_SHADER:           return 0;
-    case GL_FRAGMENT_SHADER:         return 1;
-    case GL_TESS_CONTROL_SHADER:     return 2;
-    case GL_TESS_EVALUATION_SHADER:  return 3;
-    case GL_GEOMETRY_SHADER:         return 4;
-    case GL_COMPUTE_SHADER:          return 5;
 
-    default: return -1;
-    }
-}
+
 
 struct CompiledShaders {
     GLuint shaders[stage_count];
-
-
 };
 
 template <int b_sz> struct ShaderReader {
@@ -94,8 +108,8 @@ template <int b_sz> struct ShaderReader {
     int depth = 0;
     TagTree<50, 10> tgtree;
 
+    CircularBuff<delim_len> delim_tkn;
     int   active_shaders[stage_count] = { 0 };
-
     Tag* currnt_tag = tgtree.top();
 
 
@@ -133,6 +147,7 @@ template <int b_sz> struct ShaderReader {
 
         if (c != ' ')
             delim_tkn.put_char(c);
+
         char_no++;
         return c;
     }
@@ -387,12 +402,21 @@ template <int b_sz> struct ShaderReader {
     }
 
 
-    int compile_shader(GLenum enm) {
-        int index = GLshader_to_index(enm);
+     void compile_shader(GLenum type) {
+        int index = GLshader_to_index(type);
         HashNode node;
         node.val = all_names.hashes[index];
+        
+        Tag* found = tgtree.find_in_branch(tgtree.root, &node);
 
-        tgtree.find_in_branch(tgtree.root, &node);
+        int cntn_len = tgtree.cntn_len(found);
+        char* shader = new char[cntn_len];
+
+        TagWriter writer (buffer,shader);
+        writer.tag_tree_write(found);
+
+        gl_compile_shader(type,shader);
+        delete[] buffer;
     }
 };
 
