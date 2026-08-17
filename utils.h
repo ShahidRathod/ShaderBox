@@ -158,9 +158,13 @@ using HashLinkT = Linked<hashT>;
 using HashNode = Node<hashT>;
 
 struct Tag {
-    static int counter ;
-    HashLinkT hash_lst;
+   
+    static int counter;
     static MemPool<HashNode, 100> hash_pool;
+
+    char buffer[n_sz] = { ' ' };
+    char tag_name[n_sz] = "new_tag";
+
     int tag_no;
     int start_ln_no;
     int opn_tg_strt;
@@ -169,8 +173,10 @@ struct Tag {
     int cls_tg_end;
     int end_ln_no;
     bool is_writable = false;
-    char buffer[n_sz] = {' '};
-    char tag_name[n_sz]= "new_tag";
+
+    
+
+    HashLinkT hash_lst;
     hashT tag_hash;
     Tag* next = nullptr;
     Tag* inside = nullptr;
@@ -244,8 +250,9 @@ struct TagTree {
     int stk_len = 0;
 
 
-    Tag* level[sz];
+    static constexpr int  l_sz = sz*10;
 
+    Tag* level[l_sz];
     int level_offset = 0;
     int level_sz = 0;
     int nxt_level_sz = 0;
@@ -284,10 +291,23 @@ struct TagTree {
     }
 
     void add_nxt_layer(Tag* inside_ptr) {
-    
+        
+        int write_index = level_offset + level_sz + nxt_level_sz;
+
+        if (write_index >= l_sz) {
+            std::cerr << RED "level overflow\n" RESET;
+        }
+
         if (inside_ptr->inside) {
+
+            std::cout << "level_offset = " << level_offset
+                << "\nlevel_sz = " << level_sz
+                << "\nnxt_level_sz = " << nxt_level_sz
+                << "\nindex = " << index
+                << "\n\n\n";
             level[level_offset + level_sz + nxt_level_sz] = inside_ptr->inside;
             nxt_level_sz++;
+
         }
     }
 
@@ -300,6 +320,7 @@ struct TagTree {
             nxt_level_sz = 0;
             index = 0;
         }
+        //std::cout <<"name: " << "\n";
         return res;
     }
 
@@ -313,7 +334,9 @@ struct TagTree {
                 add_nxt_layer(inside_ptr);
 
                 if (hash->val == inside_ptr->tag_hash) {
-                    if (hash->next == nullptr) return inside_ptr;
+                    hash = hash->next;
+                    if (hash == nullptr) return inside_ptr;
+
                     nxt_level_sz = 1;
                     break;
                 }
@@ -345,6 +368,7 @@ struct TagTree {
     }
 
     int cntn_len(Tag* tag) {
+        memset(level,0,sizeof(level));
         level[0] = tag;
         level_sz = 1;
         level_offset = 0;
@@ -354,14 +378,18 @@ struct TagTree {
         int tag_end, tag_start;
 
         while (level_sz != 0) {
+
             Tag* inside_ptr = nxt_tag_on_layer();
             while (inside_ptr != nullptr) {
                 tag_end = inside_ptr->cls_tg_end;
                 add_nxt_layer(inside_ptr);
-                if (!inside_ptr->inside) cntn += inside_ptr->cntn_len();
+                if (!inside_ptr->inside) 
+                    cntn += inside_ptr->cntn_len();
                 inside_ptr = inside_ptr->next;
             }
         }
+
+        return cntn;
     }
 };
 
@@ -401,6 +429,7 @@ struct TagWriter {
     }
 };
 
+
 template <int sz>
 struct CircularBuff {
     int len = 0;
@@ -427,5 +456,4 @@ struct CircularBuff {
         return is_equal;
     }
 };
-
 

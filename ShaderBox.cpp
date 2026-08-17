@@ -33,7 +33,8 @@ int GLshader_to_index(GLenum enm)
     default: return -1;
     }
 }
-GLuint gl_compile_shader(GLenum type, const char* src) {}
+
+GLuint gl_compile_shader(GLenum type, const char* src) { return GLuint{}; }
 
 using std::cerr;
 using std::cout;
@@ -125,6 +126,7 @@ template <int b_sz> struct ShaderReader {
     }
 
     void outscope() {
+        currnt_tag->commit_name();
         tgtree.pop();
         currnt_tag = tgtree.top();
         depth--;
@@ -256,10 +258,13 @@ template <int b_sz> struct ShaderReader {
 
     void parse_end_tag(int tag_start) {
 
+        char buffer[n_sz];
+        strcpy(buffer,currnt_tag->buffer);
         cpy_tag_str(currnt_tag->buffer, false, ">");
-        
         currnt_tag->check_end_same(char_no,ln_no);
 
+        strcpy(currnt_tag->buffer,buffer);
+        
         currnt_tag->cntnt_end = tag_start;
         currnt_tag->end_ln_no = ln_no;
         currnt_tag->cls_tg_end = char_no;
@@ -271,6 +276,7 @@ template <int b_sz> struct ShaderReader {
 
         cpy_tag_str(currnt_tag->buffer, false, ">");
         currnt_tag->commit_hash();
+
 
     }
     
@@ -402,12 +408,17 @@ template <int b_sz> struct ShaderReader {
     }
 
 
-     void compile_shader(GLenum type) {
+     void compile_shader(const char* enitity,GLenum type) {
         int index = GLshader_to_index(type);
-        HashNode node;
-        node.val = all_names.hashes[index];
-        
-        Tag* found = tgtree.find_in_branch(tgtree.root, &node);
+
+        HashNode enitiyNode,shaderNode;
+
+        enitiyNode.val = hash(enitity);
+        shaderNode.val = shaderNode.val = all_names.hashes[index];
+        enitiyNode.next = &shaderNode;
+        shaderNode.next = nullptr;
+
+        Tag* found = tgtree.find_in_branch(tgtree.root, & enitiyNode);
 
         int cntn_len = tgtree.cntn_len(found);
         char* shader = new char[cntn_len];
@@ -417,6 +428,7 @@ template <int b_sz> struct ShaderReader {
 
         gl_compile_shader(type,shader);
         delete[] buffer;
+
     }
 };
 
@@ -424,7 +436,12 @@ template <int b_sz> struct ShaderReader {
 int main() {
 
     ShaderReader<2000> reader ("shaders.h");
+
     reader.tgtree.root;
+
+    reader.compile_shader("surface", GL_VERTEX_SHADER);
+
+   // reader.tgtree.root;
     cout << "parsing complete\n";
 
 }
