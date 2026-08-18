@@ -244,6 +244,8 @@ template <int b_sz> struct ShaderReader {
             if (end == '>') break;
         }
 
+        currnt_tag->end_ln_no = ln_no;
+        currnt_tag->cntnt_end = char_no;
 
         HashLinkT currnt_hash_link = currnt_tag->hash_lst;
         Tag* tg_found = tgtree.find(currnt_hash_link);
@@ -302,12 +304,17 @@ template <int b_sz> struct ShaderReader {
         initiate_tag(expect_spc);
         char* first_str = currnt_tag->tag_name;
         int indx = currnt_tag->init_Tag(depth);
+
+
+
         currnt_tag->type = (TagType)(indx);
+
         if (expect_spc) {
            
             if (indx < (int)(TagType::Copy)) {
                 RAISE_INVALID_TAG_NAME(currnt_tag->tag_name);
             }
+
             TagType type = (TagType)indx; 
             if (type == TagType::Paste) parse_scope_tree();
             if (type == TagType::Copy) name_override();
@@ -436,7 +443,6 @@ template <int b_sz> struct ShaderReader {
 int main() {
 
     ShaderReader<2000> reader ("shaders.h");
-
     reader.tgtree.root;
 
     reader.compile_shader("surface", GL_VERTEX_SHADER);

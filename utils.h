@@ -190,8 +190,9 @@ struct Tag {
     inline int tag_len() { return cntnt_start-opn_tg_strt + cls_tg_end-cntnt_end; }
     inline int span() { return cls_tg_end - opn_tg_strt; }
     inline bool has_inside(Tag* tag) {
-        return opn_tg_strt < tag->opn_tg_strt && tag->cls_tg_end < cls_tg_end;
-    }
+
+
+        return opn_tg_strt < tag->opn_tg_strt && tag->cls_tg_end < cls_tg_end;}
 
     int init_Tag(int depth) { // assumes the tag_name is already written
         if (depth > 1) is_writable = true;
@@ -334,7 +335,9 @@ struct TagTree {
 
         while (level_sz != 0) {
             Tag* inside_ptr = nxt_tag_on_layer();
-            while (inside_ptr != nullptr) {
+            for (;
+                inside_ptr;
+                inside_ptr = inside_ptr->next) {
                 if (inside_ptr->type == TagType::Paste) continue;
                 add_nxt_layer(inside_ptr);
 
@@ -345,11 +348,12 @@ struct TagTree {
                     nxt_level_sz = 1;
                     break;
                 }
-                inside_ptr = inside_ptr->next;
+
             }
         }
         return nullptr;
     }
+
 
     Tag* find_in_branch (Tag * branch_root, HashNode* hashNode) {
         level[0] = branch_root;
@@ -364,7 +368,6 @@ struct TagTree {
     Tag* find(HashLinkT hash_link) {
 
         Tag* res = find_in_branch(root, hash_link.root);
-
         if (!res) {
             std::cerr << RED "Tag not found \n" RESET;
             std::exit(EXIT_FAILURE);
@@ -374,53 +377,19 @@ struct TagTree {
     }
 
 
-    int paste_cntn_len(Tag* paste_inside) {
-
-        int cntnt_len = paste_inside->span();
-
-        int start = 0;
-        int layer_bound = level_offset + level_sz;
-        for (int i = 0;i <layer_bound;i++) {
-            if (paste_inside == level[i]) break;
-            start++;
-        }
-       
-        for (int i = start; i < layer_bound;i++) {
-            Tag* ptr = level[i];
-            if (paste_inside->has_inside(ptr)) {
-                cntnt_len -= ptr->tag_len();
+    int cntn_len_of_tag(Tag* tag) {
+        int cntnt_len = tag->span();
+        int i = 1;
+        for (; tag->has_inside(tag+i) ;i++) {
+            if (tag[i].type == TagType::Paste) {
+                cntnt_len += cntn_len_of_tag(tag[i].inside);
             }
+            cntnt_len -= (tag+i)->tag_len();
         }
-
         return cntnt_len;
 
     }
 
-    int cntn_len_of_tag(Tag* tag,int offset = 0) {
-        if(offset == 0) memset(level,0,sizeof(level));    
-        level[offset] = tag;
-        level_sz = 1;
-        level_offset = offset;
-        nxt_level_sz = 0;
-
-        int cntn = tag->span();
-
-        while (level_sz != 0) {
-
-            Tag* inside_ptr = nxt_tag_on_layer();
-            inside_ptr->type;
-            while (inside_ptr != nullptr) {
-                add_nxt_layer(inside_ptr);
-                if (inside_ptr->type == TagType::Paste) 
-                    cntn += paste_cntn_len(inside_ptr->inside);
-                else 
-                    cntn -= inside_ptr->tag_len();
-                inside_ptr = inside_ptr->next;
-            }
-        }
-
-        return cntn;
-    }
 };
 
 struct TagWriter {
