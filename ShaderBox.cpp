@@ -302,7 +302,7 @@ template <int b_sz> struct ShaderReader {
         initiate_tag(expect_spc);
         char* first_str = currnt_tag->tag_name;
         int indx = currnt_tag->init_Tag(depth);
-
+        currnt_tag->type = (TagType)(indx);
         if (expect_spc) {
            
             if (indx < (int)(TagType::Copy)) {
@@ -420,7 +420,7 @@ template <int b_sz> struct ShaderReader {
 
         Tag* found = tgtree.find_in_branch(tgtree.root, & enitiyNode);
 
-        int cntn_len = tgtree.cntn_len(found);
+        int cntn_len = tgtree.cntn_len_of_tag(found);
         char* shader = new char[cntn_len];
 
         TagWriter writer (buffer,shader);
