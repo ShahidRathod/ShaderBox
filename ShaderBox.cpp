@@ -271,7 +271,7 @@ template <int b_sz> struct ShaderReader {
         
         currnt_tag->cntnt_end = tag_start;
         currnt_tag->end_ln_no = ln_no;
-        currnt_tag->cls_tg_end = char_no;
+        currnt_tag->cls_tg_end = char_no-1;
         
         outscope();
     }
@@ -279,14 +279,14 @@ template <int b_sz> struct ShaderReader {
     void name_override() {
 
         cpy_tag_str(currnt_tag->buffer, false, ">");
-        currnt_tag->cntnt_start = char_no;
+        currnt_tag->cntnt_start = char_no-1;
         currnt_tag->commit_hash();
 
 
     }
     
     bool parse_tag() {
-        int tag_start = char_no - 1;
+        int tag_start = char_no-1;
         int start_ln = ln_no;
         get_nxt();
         skip_whitespc();
@@ -428,13 +428,10 @@ template <int b_sz> struct ShaderReader {
 
         Tag* found = tgtree.find_in_branch(tgtree.root, & enitiyNode);
 
-        int cntn_len = tgtree.cntn_len_of_tag(found);
-        char* shader = new char[cntn_len];
+        TagWriter writer (buffer,found);
 
-        TagWriter writer (buffer,shader);
-        writer.tag_tree_write(found);
+        gl_compile_shader(type,writer.tag_content());
 
-        gl_compile_shader(type,shader);
         delete[] buffer;
 
     }

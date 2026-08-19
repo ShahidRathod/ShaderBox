@@ -379,47 +379,45 @@ struct TagTree {
 
 struct WriteRange { int start, end; };
 
-template <int sz>
+
 struct TagWriter {
     char* src;
     char* dst = nullptr;
     char* pen;
-    
-    int cntn_len = 0; 
-    WriteRange write_range[sz];
-    int range_len = 0;
 
-    TagWriter(char* fl, char* d) {
-        src = fl;
-        pen = dst = d;
-    }
+    Tag* root = nullptr;
+
+
+    char* tag_content() {return dst;}
+
 
     inline size_t write_by_range(int start, int end) {
-        int len = start - end;
-        memcpy(pen, src + start, len);
+        int len = end - start;
+        memcpy(pen,src+start,len);
         pen += len;
         return len;
     }
-    
-    void commit_write() 
-        for (int i = 0; i < range_len;i++) {
-            cntn_len += write_range[i].end - write_range[i].start; 
-        }
-        
-        char* src_old = src;
-        src = new char[cntn_len];
-        memcpy;
 
-        for (int i = 0; i < range_len;i++) {
-            write_by_range(write_range[i].start,write_range[i].end);
-        }
-    }
-
-    void init_write_range(Tag* tag, int offset = 0) {
+    int cntn_len_of_tag(Tag* tag) {
+        int cntn_len = tag->span();
         int i = 0;
         for (; tag->has_inside(tag + i);i++) {
             if (tag[i].type == TagType::Paste) {
-                init_write_range(root + i, i);
+                cntn_len += cntn_len_of_tag((tag+i)->inside);
+            }
+            
+            cntn_len -= tag[i].tag_len();
+        }
+        return cntn_len;
+    }
+
+    void tag_tree_write(Tag* root) {
+        int end, start;
+        int i = 0;
+        for (;root->has_inside(root + i);i++) {
+            if (!root[i].is_writable) continue;
+            if (root[i].type == TagType::Paste) {
+                tag_tree_write(root[i].inside);
                 continue;
             }
             start = root[i].cntnt_start;
@@ -427,25 +425,16 @@ struct TagWriter {
             if (root[i].has_inside(root + i + 1))
                 end = root[i + 1].opn_tg_start;
 
-            write_range[offset + i] = {start,end};
+            write_by_range(start, end);
         }
     }
 
-    void tag_tree_write(Tag* root) {
-        int end,start;
-        int i = 0;
-        for (;root->has_inside(root + i);i++) {
-            if (root[i].type == TagType::Paste) {
-                tag_tree_write(root + i);
-                continue;
-            }
-            start = root[i].cntnt_start;
-            end = root[i].cntnt_end;
-            if (root[i].has_inside(root + i + 1)) 
-                end = root[i + 1].opn_tg_start;
-           
-            write_by_range(start,end);
-        }
+
+    TagWriter(char* fl, Tag* rt) {
+        src = fl;
+        root = rt;
+        pen = dst = new char[cntn_len_of_tag(root)];
+        tag_tree_write(root);
     }
 
     ~TagWriter() {
