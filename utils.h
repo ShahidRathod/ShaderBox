@@ -82,10 +82,10 @@ constexpr ConstexprStr <n_sz, stage_count>
 subtag_names{ "vertex,fragment,tess_control,tess_eval,geometry,compute," };
 
 constexpr int cammnds = 3;
-constexpr ConstexprStr<n_sz, cammnds> 
+constexpr ConstexprStr<n_sz, cammnds>
 cammnd_tags{ "copy,paste,scope," };
 
-constexpr ConstexprStr <n_sz, stage_count + cammnds> 
+constexpr ConstexprStr <n_sz, stage_count + cammnds>
 all_names{ "vertex,fragment,tess_control,tess_eval,geometry,compute,copy,paste,scope," };
 
 
@@ -93,7 +93,7 @@ all_names{ "vertex,fragment,tess_control,tess_eval,geometry,compute,copy,paste,s
 
 
 
-bool hash_compare(char* str1, char* str2) { return hash(str1) == hash(str2) ; }
+bool hash_compare(char* str1, char* str2) { return hash(str1) == hash(str2); }
 
 template <typename T, int sz>
 struct MemPool {
@@ -108,7 +108,7 @@ struct MemPool {
         int len_temp = len;
         len++;
         return mem + len_temp;
-        
+
     }
 };
 
@@ -130,10 +130,10 @@ enum class TagType : int {
     Scope
 };
 
-enum class OpenClose : int { Open , Close };
+enum class OpenClose : int { Open, Close };
 struct TagInfo {
     TagType type;
-    OpenClose opncls; 
+    OpenClose opncls;
     bool is_tag;
 };
 
@@ -142,7 +142,7 @@ template <typename T>
 struct Linked {
     using NodeT = Node<T>;
     NodeT* root = nullptr;
-    NodeT* end =  nullptr;
+    NodeT* end = nullptr;
     void add(NodeT* nxt_ptr) {
         if (!root)  root = nxt_ptr;
         else {
@@ -158,7 +158,7 @@ using HashLinkT = Linked<hashT>;
 using HashNode = Node<hashT>;
 
 struct Tag {
-   
+
     static int counter;
     static MemPool<HashNode, 100> hash_pool;
 
@@ -167,14 +167,14 @@ struct Tag {
 
     int tag_no;
     int start_ln_no;
-    int opn_tg_strt;
+    int opn_tg_start;
     int cntnt_start;
     int cntnt_end;
     int cls_tg_end;
     int end_ln_no;
     bool is_writable = false;
 
-    
+
 
     HashLinkT hash_lst;
     hashT tag_hash;
@@ -183,16 +183,15 @@ struct Tag {
     TagType type;
     bool is_init = false;
 
-    Tag() {  
+    Tag() {
         tag_no = counter++;
     }
-    
-    inline int tag_len() { return cntnt_start-opn_tg_strt + cls_tg_end-cntnt_end; }
-    inline int span() { return cls_tg_end - opn_tg_strt; }
+
+    inline int tag_len() { return cntnt_start - opn_tg_start + cls_tg_end - cntnt_end; }
+    inline int span() { return cls_tg_end - opn_tg_start; }
     inline bool has_inside(Tag* tag) {
-
-
-        return opn_tg_strt < tag->opn_tg_strt && tag->cls_tg_end < cls_tg_end;}
+        return opn_tg_start <= tag->opn_tg_start && tag->cls_tg_end <= cls_tg_end;
+    }
 
     int init_Tag(int depth) { // assumes the tag_name is already written
         if (depth > 1) is_writable = true;
@@ -205,21 +204,21 @@ struct Tag {
     }
 
 
-    void commit_name() { 
-        strcpy(tag_name,buffer);
+    void commit_name() {
+        strcpy(tag_name, buffer);
     }
 
     void commit_hash() {
         tag_hash = hash(buffer);
     }
-    
-    void check_end_same(int ln_no , int char_no) {
+
+    void check_end_same(int ln_no, int char_no) {
 
         bool is_same = hash(buffer) == hash(tag_name);
         if (!is_same) RAISE_CLOSE_TAG_MISMATCH();
 
     }
-    
+
     void append_hash_lnk() {
         if (tag_no == 7) {
             int c = counter;
@@ -228,9 +227,9 @@ struct Tag {
         ptr->val = hash(buffer);
         hash_lst.add(ptr);
     }
- 
+
     void addInside(Tag* nxt) { // add to next to current_scope
-        
+
         if (!inside) inside = nxt;
         else {
             Tag* ptr = inside; // ptr by reference
@@ -253,11 +252,11 @@ struct TagTree {
     Tag* curnt = root;
 
     Tag* stack[max_copy_depth];
-    
+
     int stk_len = 0;
 
 
-    static constexpr int  l_sz = sz*10;
+    static constexpr int  l_sz = sz * 10;
 
     Tag* level[l_sz];
     int level_offset = 0;
@@ -283,13 +282,13 @@ struct TagTree {
         len++;
         return new_tg;
     }
-    
 
-    void pop() { stk_len-- ; }
 
-    void addStack(Tag * ptr) { // just adds into stack whatever ptr is passed
+    void pop() { stk_len--; }
 
-        if (stk_len  >= max_copy_depth)
+    void addStack(Tag* ptr) { // just adds into stack whatever ptr is passed
+
+        if (stk_len >= max_copy_depth)
             std::cerr << RED "Max stack length reached\n" RESET;
         else {
             stk_len++;
@@ -298,7 +297,7 @@ struct TagTree {
     }
 
     void add_nxt_layer(Tag* inside_ptr) {
-        
+
         int write_index = level_offset + level_sz + nxt_level_sz;
 
         if (write_index >= l_sz) {
@@ -331,7 +330,7 @@ struct TagTree {
         return res;
     }
 
-    Tag* find_hlpr(HashNode* hash ,int cntn_len = 0) {
+    Tag* find_hlpr(HashNode* hash, int cntn_len = 0) {
 
         while (level_sz != 0) {
             Tag* inside_ptr = nxt_tag_on_layer();
@@ -355,7 +354,7 @@ struct TagTree {
     }
 
 
-    Tag* find_in_branch (Tag * branch_root, HashNode* hashNode) {
+    Tag* find_in_branch(Tag* branch_root, HashNode* hashNode) {
         level[0] = branch_root;
         level_sz = 1;
         level_offset = 0;
@@ -363,8 +362,8 @@ struct TagTree {
         return find_hlpr(hashNode);
     }
 
-  
-    
+
+
     Tag* find(HashLinkT hash_link) {
 
         Tag* res = find_in_branch(root, hash_link.root);
@@ -376,26 +375,19 @@ struct TagTree {
 
     }
 
-
-    int cntn_len_of_tag(Tag* tag) {
-        int cntnt_len = tag->span();
-        int i = 1;
-        for (; tag->has_inside(tag+i) ;i++) {
-            if (tag[i].type == TagType::Paste) {
-                cntnt_len += cntn_len_of_tag(tag[i].inside);
-            }
-            cntnt_len -= (tag+i)->tag_len();
-        }
-        return cntnt_len;
-
-    }
-
 };
 
+struct WriteRange { int start, end; };
+
+template <int sz>
 struct TagWriter {
     char* src;
-    char* dst;
+    char* dst = nullptr;
     char* pen;
+    
+    int cntn_len = 0; 
+    WriteRange write_range[sz];
+    int range_len = 0;
 
     TagWriter(char* fl, char* d) {
         src = fl;
@@ -404,27 +396,60 @@ struct TagWriter {
 
     inline size_t write_by_range(int start, int end) {
         int len = start - end;
-        memcpy(pen,src+start,len);
+        memcpy(pen, src + start, len);
         pen += len;
         return len;
     }
+    
+    void commit_write() 
+        for (int i = 0; i < range_len;i++) {
+            cntn_len += write_range[i].end - write_range[i].start; 
+        }
+        
+        char* src_old = src;
+        src = new char[cntn_len];
+        memcpy;
+
+        for (int i = 0; i < range_len;i++) {
+            write_by_range(write_range[i].start,write_range[i].end);
+        }
+    }
+
+    void init_write_range(Tag* tag, int offset = 0) {
+        int i = 0;
+        for (; tag->has_inside(tag + i);i++) {
+            if (tag[i].type == TagType::Paste) {
+                init_write_range(root + i, i);
+                continue;
+            }
+            start = root[i].cntnt_start;
+            end = root[i].cntnt_end;
+            if (root[i].has_inside(root + i + 1))
+                end = root[i + 1].opn_tg_start;
+
+            write_range[offset + i] = {start,end};
+        }
+    }
 
     void tag_tree_write(Tag* root) {
-        if (!root->is_writable) return;
-
-        int st = root->cntnt_start;
-        int end;
-        Tag* inside = root->inside;
-
-        while (inside != nullptr) {
-            end = inside->opn_tg_strt;
-            write_by_range(st, end);
-            tag_tree_write(inside);
-            st = inside->cls_tg_end;
-            inside = inside->next;
+        int end,start;
+        int i = 0;
+        for (;root->has_inside(root + i);i++) {
+            if (root[i].type == TagType::Paste) {
+                tag_tree_write(root + i);
+                continue;
+            }
+            start = root[i].cntnt_start;
+            end = root[i].cntnt_end;
+            if (root[i].has_inside(root + i + 1)) 
+                end = root[i + 1].opn_tg_start;
+           
+            write_by_range(start,end);
         }
+    }
 
-        write_by_range(st, root->cntnt_end);
+    ~TagWriter() {
+        delete[] dst;
     }
 };
 
@@ -455,4 +480,3 @@ struct CircularBuff {
         return is_equal;
     }
 };
-

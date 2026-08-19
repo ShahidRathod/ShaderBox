@@ -126,6 +126,7 @@ template <int b_sz> struct ShaderReader {
     }
 
     void outscope() {
+
         currnt_tag->commit_name();
         tgtree.pop();
         currnt_tag = tgtree.top();
@@ -244,8 +245,9 @@ template <int b_sz> struct ShaderReader {
             if (end == '>') break;
         }
 
-        currnt_tag->end_ln_no = ln_no;
-        currnt_tag->cntnt_end = char_no;
+        currnt_tag->cls_tg_end = 
+            currnt_tag->cntnt_start = 
+                    currnt_tag->cntnt_end = char_no;
 
         HashLinkT currnt_hash_link = currnt_tag->hash_lst;
         Tag* tg_found = tgtree.find(currnt_hash_link);
@@ -277,6 +279,7 @@ template <int b_sz> struct ShaderReader {
     void name_override() {
 
         cpy_tag_str(currnt_tag->buffer, false, ">");
+        currnt_tag->cntnt_start = char_no;
         currnt_tag->commit_hash();
 
 
@@ -297,15 +300,13 @@ template <int b_sz> struct ShaderReader {
 
         inscope(); // any tag created always gets us inscope and vice versa
 
-        currnt_tag->opn_tg_strt = tag_start;
+        currnt_tag->opn_tg_start = tag_start;
         bool in_cntnt = depth > 2;
         bool expect_spc = (is_cls ^ in_cntnt) && in_cntnt;
 
         initiate_tag(expect_spc);
         char* first_str = currnt_tag->tag_name;
         int indx = currnt_tag->init_Tag(depth);
-
-
 
         currnt_tag->type = (TagType)(indx);
 
