@@ -330,14 +330,17 @@ struct TagTree {
         return res;
     }
 
-    Tag* find_hlpr(HashNode* hash, int cntn_len = 0) {
+    Tag* find_hlpr(HashNode* hash, bool check_resursive = false) {
 
         while (level_sz != 0) {
             Tag* inside_ptr = nxt_tag_on_layer();
             for (;
                 inside_ptr;
                 inside_ptr = inside_ptr->next) {
-                if (inside_ptr->type == TagType::Paste) continue;
+
+                if (inside_ptr->type == TagType::Paste && !check_resursive) 
+                    continue;
+                
                 add_nxt_layer(inside_ptr);
 
                 if (hash->val == inside_ptr->tag_hash) {
@@ -354,12 +357,13 @@ struct TagTree {
     }
 
 
-    Tag* find_in_branch(Tag* branch_root, HashNode* hashNode) {
+    Tag* find_in_branch(Tag* branch_root, HashNode* hashNode,bool check_resursive = false) {
+        memset(level,0,sizeof(level));
         level[0] = branch_root;
         level_sz = 1;
         level_offset = 0;
         nxt_level_sz = 0;
-        return find_hlpr(hashNode);
+        return find_hlpr(hashNode,check_resursive);
     }
 
 
@@ -430,7 +434,7 @@ struct TagWriter {
     }
 
 
-    TagWriter(char* fl, Tag* rt) {
+    TagWriter(char* fl, Tag* rt ) {
         src = fl;
         root = rt;
         pen = dst = new char[cntn_len_of_tag(root)];

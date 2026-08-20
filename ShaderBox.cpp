@@ -249,14 +249,18 @@ template <int b_sz> struct ShaderReader {
             currnt_tag->cntnt_start = 
                     currnt_tag->cntnt_end = char_no;
 
-        HashLinkT currnt_hash_link = currnt_tag->hash_lst;
-        Tag* tg_found = tgtree.find(currnt_hash_link);
-        if (tgtree.find_in_branch(tg_found->inside, (currnt_hash_link.end))) {
-            RAISE_RECURSIVE_PASTING;
-        }
+        HashLinkT hash_link = currnt_tag->hash_lst;
+        Tag* tg_found = tgtree.find(hash_link);
+
+
         currnt_tag->addInside(tg_found);
+
+        bool paste_in_itself = 
+            tgtree.find_in_branch(tg_found->inside, (hash_link.end),true);
+       
+        if (paste_in_itself) RAISE_RECURSIVE_PASTING;
+        
         outscope();
-        content_loop();
         
     }
 
@@ -266,7 +270,6 @@ template <int b_sz> struct ShaderReader {
         strcpy(buffer,currnt_tag->buffer);
         cpy_tag_str(currnt_tag->buffer, false, ">");
         currnt_tag->check_end_same(char_no,ln_no);
-
         strcpy(currnt_tag->buffer,buffer);
         
         currnt_tag->cntnt_end = tag_start;
@@ -305,11 +308,12 @@ template <int b_sz> struct ShaderReader {
         bool expect_spc = (is_cls ^ in_cntnt) && in_cntnt;
 
         initiate_tag(expect_spc);
+
         char* first_str = currnt_tag->tag_name;
         int indx = currnt_tag->init_Tag(depth);
 
         currnt_tag->type = (TagType)(indx);
-
+        
         if (expect_spc) {
            
             if (indx < (int)(TagType::Copy)) {
@@ -319,18 +323,22 @@ template <int b_sz> struct ShaderReader {
             TagType type = (TagType)indx; 
             if (type == TagType::Paste) parse_scope_tree();
             if (type == TagType::Copy) name_override();
+
         }
         return is_cls;
     }
+    
+    // check_tag_syntax : make it parse_tag_inside
 
     bool check_tag_syntax() {
+
         int  temp_char_no = char_no;
         bool temp_in_comnt = at_comnt;
         int  temp_ln_no = ln_no;
-
-        char tg_special_chars[] = "/:";
-        int  count[3] = {0};
-        int pos[3] = {0};
+        constexpr int alowwed_no = 5;
+        char tg_special_chars[alowwed_no] = "/:_ ";
+        int  count[alowwed_no] = {0};
+        int pos[alowwed_no] = {0};
 
         bool is_tag = true;
         while (get_nxt() != '>') {
@@ -339,7 +347,7 @@ template <int b_sz> struct ShaderReader {
                 
                 int i = 0;
                 bool found = false;
-                for (i = 0; i < 2 ; i++) {
+                for (i = 0; i < alowwed_no ; i++) {
                     if (tg_special_chars[i] == cursr) {
                         found = true;
                         break;
@@ -380,7 +388,8 @@ template <int b_sz> struct ShaderReader {
     void content_loop() {
         loop();
         if (cursr == '\0') return;
-        if (check_tag_syntax()) parse_tag();
+        if (check_tag_syntax()) 
+            parse_tag();
         content_loop();
     }
 
@@ -404,9 +413,7 @@ template <int b_sz> struct ShaderReader {
         if ( file_sz >= b_sz) RAISE_INSUFFICIENT_SPACE;
 
         fread(buffer, sizeof(char), file_sz, file);
-        
         fclose(file);
-
         strcpy(currnt_tag->tag_name,file_name);
         currnt_tag->append_hash_lnk();
 
@@ -440,7 +447,7 @@ template <int b_sz> struct ShaderReader {
 
 int main() {
 
-    ShaderReader<2000> reader ("shaders.h");
+    ShaderReader<4000> reader ("shaders.h");
     reader.tgtree.root;
 
     reader.compile_shader("surface", GL_VERTEX_SHADER);

@@ -43,7 +43,7 @@
 
 #define RAISE_ELEMENT_TAG_MISMATCH(open_name, close_name, idx)                  \
     RAISE_PRINT_EXIT("Element(" << (idx) << "): open tag-" << (open_name)       \
-                     << " does not match close tag-" << (close_name))
+                     << " does not match close tag " << (close_name))
 
 #define RAISE_SHADER_ALREADY_DEFINED(shdr_name, l1, l2)                                 \
     RAISE_PRINT_EXIT("Shader: " << (shdr_name) << " Element: " << curnt_element->name   \
@@ -52,7 +52,7 @@
 
 #define RAISE_CLOSE_TAG_MISMATCH()                                              \
     RAISE_PRINT_EXIT("Close tag subtag name:"<<tag_name                                   \
-                     << " does not match with open tag name"<<buffer  << "\n")
+                     << " does not match with open tag name "<<buffer  << "\n")
 
 #define RAISE_INSUFFICIENT_SPACE                                                \
     RAISE_PRINT_EXIT("INSUFFICIENT SPACE \n")
