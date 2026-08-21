@@ -258,8 +258,10 @@ template <int b_sz> struct ShaderReader {
         bool paste_in_itself = 
             tgtree.find_in_branch(tg_found->inside, (hash_link.end),true);
        
-        if (paste_in_itself) RAISE_RECURSIVE_PASTING;
-        
+        if (paste_in_itself) {
+
+            RAISE_RECURSIVE_PASTING;
+        }
         outscope();
         
     }
@@ -434,11 +436,8 @@ template <int b_sz> struct ShaderReader {
         shaderNode.next = nullptr;
 
         Tag* found = tgtree.find_in_branch(tgtree.root, & enitiyNode);
-
         TagWriter writer (buffer,found);
-
         gl_compile_shader(type,writer.tag_content());
-
         delete[] buffer;
 
     }
@@ -449,7 +448,6 @@ int main() {
 
     ShaderReader<4000> reader ("shaders.h");
     reader.tgtree.root;
-
     reader.compile_shader("surface", GL_VERTEX_SHADER);
 
    // reader.tgtree.root;

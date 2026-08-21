@@ -164,7 +164,7 @@ struct Tag {
 
     char buffer[n_sz] = { ' ' };
     char tag_name[n_sz] = "new_tag";
-
+    int tags_inside = 0;
     int tag_no;
     int start_ln_no;
     int opn_tg_start;
@@ -173,7 +173,6 @@ struct Tag {
     int cls_tg_end;
     int end_ln_no;
     bool is_writable = false;
-
 
 
     HashLinkT hash_lst;
@@ -189,9 +188,6 @@ struct Tag {
 
     inline int tag_len() { return cntnt_start - opn_tg_start + cls_tg_end - cntnt_end; }
     inline int span() { return cls_tg_end - opn_tg_start; }
-    inline bool has_inside(Tag* tag) {
-        return opn_tg_start <= tag->opn_tg_start && tag->cls_tg_end <= cls_tg_end;
-    }
 
     int init_Tag(int depth) { // assumes the tag_name is already written
         if (depth > 1) is_writable = true;
@@ -246,6 +242,8 @@ MemPool<HashNode, 100> Tag::hash_pool;
 
 template <int sz, int max_copy_depth>
 struct TagTree {
+    
+    Tag safety_padding;
     Tag arr[sz];
     Tag root_obj;
     Tag* root = arr;
@@ -272,6 +270,8 @@ struct TagTree {
 
     Tag* top() { return stack[stk_len]; }
 
+    Tag* end() { return arr + len-1;}
+
     Tag* make_tag() { // gets memory 
         if (len >= sz) {
             std::cerr << "Max tag limit reached";
@@ -283,7 +283,11 @@ struct TagTree {
         return new_tg;
     }
 
-
+    inline void inc_tags_inside() {
+        for (int i = 0; i < stk_len;i) {
+            stack[i]->tags_inside++;
+        }
+    }
     void pop() { stk_len--; }
 
     void addStack(Tag* ptr) { // just adds into stack whatever ptr is passed
@@ -294,6 +298,7 @@ struct TagTree {
             stk_len++;
             stack[stk_len] = ptr;
         }
+        inc_tags_inside();
     }
 
     void add_nxt_layer(Tag* inside_ptr) {
@@ -305,15 +310,8 @@ struct TagTree {
         }
 
         if (inside_ptr->inside) {
-
-            std::cout << "level_offset = " << level_offset
-                << "\nlevel_sz = " << level_sz
-                << "\nnxt_level_sz = " << nxt_level_sz
-                << "\nindex = " << index
-                << "\n\n\n";
             level[level_offset + level_sz + nxt_level_sz] = inside_ptr->inside;
             nxt_level_sz++;
-
         }
     }
 
@@ -356,7 +354,6 @@ struct TagTree {
         return nullptr;
     }
 
-
     Tag* find_in_branch(Tag* branch_root, HashNode* hashNode,bool check_resursive = false) {
         memset(level,0,sizeof(level));
         level[0] = branch_root;
@@ -388,10 +385,7 @@ struct TagWriter {
     char* src;
     char* dst = nullptr;
     char* pen;
-
-    Tag* root = nullptr;
-
-
+    Tag* root;
     char* tag_content() {return dst;}
 
 
@@ -405,11 +399,10 @@ struct TagWriter {
     int cntn_len_of_tag(Tag* tag) {
         int cntn_len = tag->span();
         int i = 0;
-        for (; tag->has_inside(tag + i);i++) {
+        for (; i<tag->tags_inside;i++) {
             if (tag[i].type == TagType::Paste) {
-                cntn_len += cntn_len_of_tag((tag+i)->inside);
+                cntn_len += cntn_len_of_tag(tag[i].inside);
             }
-            
             cntn_len -= tag[i].tag_len();
         }
         return cntn_len;
@@ -418,7 +411,7 @@ struct TagWriter {
     void tag_tree_write(Tag* root) {
         int end, start;
         int i = 0;
-        for (;root->has_inside(root + i);i++) {
+        for (;i<root->tags_inside;i++) {
             if (!root[i].is_writable) continue;
             if (root[i].type == TagType::Paste) {
                 tag_tree_write(root[i].inside);
@@ -426,9 +419,8 @@ struct TagWriter {
             }
             start = root[i].cntnt_start;
             end = root[i].cntnt_end;
-            if (root[i].has_inside(root + i + 1))
+            if (root[i].tags_inside)
                 end = root[i + 1].opn_tg_start;
-
             write_by_range(start, end);
         }
     }
