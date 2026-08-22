@@ -20,6 +20,77 @@ enum {
     GL_COMPUTE_SHADER = 0x91B9
 };
 
+
+enum class CharOfTagsInt :int {
+    slash = 0, colon = 1, underscore = 2, dollar = 3, endofchars = 4
+};
+
+enum class CharOfTagsChar : char {
+    slash = '/', colon=':', underscore='_', dollar='$'
+};
+
+
+struct CharPack {
+    char a, b;
+};
+
+int tagsindex(char c) {
+    int i = -1;
+    switch (c)
+    {
+    case '/':
+        i = 0;
+        break;
+    case ':':
+        i = 1;
+        break;
+
+    case '_':
+        i = 3;
+        break;
+    case '$':
+        i = 4;
+        break;
+    }
+
+    return i;
+}
+
+enum class Semantic {
+    comesbefore, comesafter, notcoexist, norelation
+};
+
+constexpr int alowwed_no = 6;
+
+
+template <int sz>
+struct PositionMatrix
+{
+    Semantic arr[sz*sz] = { Semantic::norelation};
+    int pos[sz];
+    int count_allowed[alowwed_no] = { 1,-1,-1,1 };
+    int  count[alowwed_no] = { 0 };
+
+    int index(char a , char b) {
+        return tagsindex(a) * sz, tagsindex(b);
+    }
+
+    void set(char a , char b, Semantic val) {
+        arr[index(a,b)] = val;
+    }
+    void c
+    bool eval (int i) {
+        for (int j = 0; j < alowwed_no; j++) {
+            Semantic sem = arr[i * n_sz + j];
+            if (sem == Semantic::norelation) continue;
+            bool comes_before = pos[i] > pos[j];
+            if (!comes_before && sem == Semantic::comesbefore) {
+                return false;
+            }
+        }
+    }
+};
+
 int GLshader_to_index(GLenum enm)
 {
     switch (enm) {
@@ -109,10 +180,21 @@ template <int b_sz> struct ShaderReader {
     int depth = 0;
     TagTree<50, 10> tgtree;
 
+    PositionMatrix<alowwed_no> tg_syntx;
     CircularBuff<delim_len> delim_tkn;
     int   active_shaders[stage_count] = { 0 };
     Tag* currnt_tag = tgtree.top();
 
+    ShaderReader() {
+
+        PositionMatrix<alowwed_no>pos_mat;
+
+        pos_mat.set('/', ':', Semantic::comesbefore);
+        pos_mat.set('$', ':', Semantic::comesbefore);
+        pos_mat.set('$', '_', Semantic::comesbefore);
+        pos_mat.set('/', '$', Semantic::notcoexist);
+        tg_syntx = pos_mat;
+    }
 
     void inscope() {
         Tag* old_scope = tgtree.top();
@@ -234,7 +316,6 @@ template <int b_sz> struct ShaderReader {
         currnt_tag->commit_hash();
         currnt_tag->commit_name();
         currnt_tag->cntnt_start = char_no-1;
-
     }
 
     void parse_scope_tree() {
@@ -336,41 +417,32 @@ template <int b_sz> struct ShaderReader {
 
         int  temp_char_no = char_no;
         bool temp_in_comnt = at_comnt;
-        int  temp_ln_no = ln_no;
-        constexpr int alowwed_no = 5;
-        char tg_special_chars[alowwed_no] = "/:_ ";
-        int  count[alowwed_no] = {0};
-        int pos[alowwed_no] = {0};
-
+        int  temp_ln_no = ln_no;       
+       
         bool is_tag = true;
+
         while (get_nxt() != '>') {
 
             if (!isalnum(cursr) && cursr != ' ') {
-                
-                int i = 0;
-                bool found = false;
-                for (i = 0; i < alowwed_no ; i++) {
-                    if (tg_special_chars[i] == cursr) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    is_tag = false;
+                int i = tagsindex(cursr);
+                if (i == -1) { 
+                    is_tag == false; 
                     break;
                 }
-                if (count[i] == 0) pos[i]++;
-                else {
-                    if (i == 0) {
-                        is_tag = false;
-                        break;
-                    }
-                }
+                if (!count[i]) tg_syntx.pos[i]++;
                 count[i]++;
             }
         }
 
-        if (pos[0] > pos[1] && count[1]>0) is_tag = false;
+        for (int i = 0; i < alowwed_no;i++) {
+            if (count[i] > count_allowed[i]) {
+                is_tag = false;
+                break;
+                tg_syntx.eval(i);
+            }
+
+        }
+
         if (is_tag) {
             char_no = temp_char_no - 1;
             get_nxt();
@@ -404,7 +476,6 @@ template <int b_sz> struct ShaderReader {
         return file;
     }
 
-    ShaderReader() {}
 
     ShaderReader(const char* file_name) {
 
@@ -438,6 +509,7 @@ template <int b_sz> struct ShaderReader {
         Tag* found = tgtree.find_in_branch(tgtree.root, & enitiyNode);
         TagWriter writer (buffer,found);
         gl_compile_shader(type,writer.tag_content());
+
         delete[] buffer;
 
     }
@@ -448,9 +520,10 @@ int main() {
 
     ShaderReader<4000> reader ("shaders.h");
     reader.tgtree.root;
-    reader.compile_shader("surface", GL_VERTEX_SHADER);
 
-   // reader.tgtree.root;
+    reader.compile_shader("surface", GL_VERTEX_SHADER);
+    
+    reader.tgtree.root;
     cout << "parsing complete\n";
 
 }

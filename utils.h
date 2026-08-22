@@ -284,7 +284,7 @@ struct TagTree {
     }
 
     inline void inc_tags_inside() {
-        for (int i = 0; i < stk_len;i) {
+        for (int i = 0; i < stk_len;i++) {
             stack[i]->tags_inside++;
         }
     }
@@ -302,13 +302,10 @@ struct TagTree {
     }
 
     void add_nxt_layer(Tag* inside_ptr) {
-
         int write_index = level_offset + level_sz + nxt_level_sz;
-
         if (write_index >= l_sz) {
             std::cerr << RED "level overflow\n" RESET;
         }
-
         if (inside_ptr->inside) {
             level[level_offset + level_sz + nxt_level_sz] = inside_ptr->inside;
             nxt_level_sz++;
