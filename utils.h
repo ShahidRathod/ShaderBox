@@ -174,7 +174,6 @@ struct Tag {
     int end_ln_no;
     bool is_writable = false;
 
-
     HashLinkT hash_lst;
     hashT tag_hash;
     Tag* next = nullptr;
