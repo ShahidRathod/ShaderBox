@@ -26,7 +26,7 @@ enum class CharOfTagsInt :int {
 };
 
 enum class CharOfTagsChar : char {
-    slash = '/', colon=':', underscore='_', dollar='$'
+    slash = '/', colon = ':', underscore = '_', dollar = '$'
 };
 
 struct CharPack {
@@ -60,23 +60,27 @@ enum class Semantic {
 
 constexpr int alowwed_no = 6;
 
-enum class Dispatch: int {open,close, paste, not_tag};
+enum class Dispatch : int { open, close, paste, not_tag };
+
+
+// Syntax parse is currently only 
+// respomnsible for ordered relation for validating if its a tag
 
 template <int sz>
-struct PositionMatrix
+struct SyntaxParser
 {
-    Semantic arr[sz*sz] = { Semantic::norelation};
+    Semantic arr[sz * sz] = { Semantic::norelation };
     const char* chars;
     int pos[sz];
     int count_allowed[alowwed_no] = { 1,-1,-1,1 };
     int  count[alowwed_no] = { 0 };
 
-    int index(char a , char b) {
+    int index(char a, char b) {
         return tagsindex(a) * sz, tagsindex(b);
     }
 
-    void set(char a , char b, Semantic val) {
-        arr[index(a,b)] = val;
+    void set(char a, char b, Semantic val) {
+        arr[index(a, b)] = val;
     }
 
     bool eval_char(char c) {
@@ -89,7 +93,7 @@ struct PositionMatrix
         // no egar evaluation for the count_allowed;
     }
 
-    bool eval_tag () {
+    bool eval_tag() {
         for (int i = 0; i < alowwed_no;i++) {
             if (count[i] > count_allowed[i]) {
                 return false;
@@ -111,12 +115,16 @@ struct PositionMatrix
             }
         }
     }
-
+    
+    int parse_offset() {
+        return count[tagsindex(':')] + count[tagsindex('$')];
+    }
+    
     Dispatch dispatch_type() {
         if (count[tagsindex('/')])      return Dispatch::close;
         else if (count[tagsindex('$')]) return Dispatch::paste;
         else                            return Dispatch::open;
-    
+
     }
 
 };
@@ -209,7 +217,7 @@ template <int b_sz> struct ShaderReader {
     int depth = 0;
     TagTree<50, 10> tgtree;
 
-    PositionMatrix<alowwed_no> tg_syntx;
+    SyntaxParser<alowwed_no> tag_syntax;
     CircularBuff<delim_len> delim_tkn;
     int   active_shaders[stage_count] = { 0 };
     Tag* currnt_tag = tgtree.top();
@@ -217,10 +225,11 @@ template <int b_sz> struct ShaderReader {
     ShaderReader() {
     }
 
-    void inscope() {
+    void inscope(TagPos new_tag_pos) {
+        
         Tag* old_scope = tgtree.top();
         Tag* new_tag = tgtree.make_tag();
-
+        new_tag->open = new_tag_pos;
         old_scope->addInside(new_tag);
         tgtree.addStack(new_tag);
         currnt_tag = tgtree.top(); // should be same as new_tg
@@ -228,8 +237,8 @@ template <int b_sz> struct ShaderReader {
         depth++;
     }
 
-    void outscope() {
-
+    void outscope(TagPos old_tag_pos) {
+        currnt_tag->close = old_tag_pos;
         currnt_tag->commit_name();
         tgtree.pop();
         currnt_tag = tgtree.top();
@@ -257,10 +266,6 @@ template <int b_sz> struct ShaderReader {
         char_no++;
         return c;
     }
-    char seek(int c_no) {
-        cursr = buffer[c_no];
-        char_no = c_no + 1;
-    }
 
     bool skip_whitespc() {
         bool hit_newln = false;
@@ -273,20 +278,10 @@ template <int b_sz> struct ShaderReader {
         return hit_newln;
     }
 
-
-    bool is_nxt_token(char c) {
-        skip_whitespc();
-        get_nxt();
-        return cursr != c;
-    }
-
-
     char cpy_tag_str(char* dst, bool expect_spc, const char* end_delim) {
-
         if (skip_whitespc()) {
             RAISE_NO_NEWLINE_INSIDE_TAGS;
         }
-
         // firt character in tag after the whitespace being skipped is first
         // character of name
 
@@ -296,7 +291,6 @@ template <int b_sz> struct ShaderReader {
 
 
         int t_name_indx = 0;
-
         char temp_name[n_sz] = {};
 
         while (!contains(cursr, end_delim)) {
@@ -329,19 +323,43 @@ template <int b_sz> struct ShaderReader {
     }
 
 
+   
+    void parse_tag_cls() {
 
-    void initiate_tag(bool expect_spc) {
+        currnt_tag->cntnt_end = char_no - 1;
+        currnt_tag->end_ln_no = ln_no;
 
-        const char* c = (expect_spc) ? " " : ">";
-        cpy_tag_str(currnt_tag->buffer, expect_spc, c);
+        get_nxt(); // skippping '/'
+        char buffer[n_sz];
+        strcpy(buffer, currnt_tag->buffer);
+        cpy_tag_str(currnt_tag->buffer, false, ">");
+        currnt_tag->check_end_same(char_no, ln_no);
+        strcpy(currnt_tag->buffer, buffer);
+
+        currnt_tag->end_ln_no = ln_no;
+        currnt_tag->cls_tg_end = char_no - 1;
+
+
+    }
+
+    void parse_tag_open() {
+        currnt_tag->opn_tg_start = char_no - 1;
+        int start_ln = ln_no;
+        inscope(); // any tag created always gets us inscope and vice versa
+
+        cpy_tag_str(currnt_tag->buffer, false, ">");
         currnt_tag->commit_hash();
         currnt_tag->commit_name();
+
         currnt_tag->cntnt_start = char_no - 1;
+        char* first_str = currnt_tag->tag_name;
+
     }
 
     void parse_paste() {
 
         get_nxt(); // skipping '$'
+
         while (true) {
             char end = cpy_tag_str(currnt_tag->buffer, true, ":>");
             currnt_tag->append_hash_lnk();
@@ -370,53 +388,20 @@ template <int b_sz> struct ShaderReader {
     }
 
 
-    void parse_tag_cls() {
-        int tag_start = char_no - 1;
-        int start_ln = ln_no;
-        get_nxt(); // skippping '/'
-        char buffer[n_sz];
-        strcpy(buffer, currnt_tag->buffer);
-        cpy_tag_str(currnt_tag->buffer, false, ">");
-        currnt_tag->check_end_same(char_no, ln_no);
-        strcpy(currnt_tag->buffer, buffer);
-
-        currnt_tag->cntnt_end = tag_start;
-        currnt_tag->end_ln_no = ln_no;
-        currnt_tag->cls_tg_end = char_no - 1;
-
-        outscope();
-
-    }
-
-    void parse_tag(bool is_cls) {
-        int tag_start = char_no-1;
-        int start_ln = ln_no;
-
-        inscope(); // any tag created always gets us inscope and vice versa
-
-        currnt_tag->opn_tg_start = tag_start;
-        bool in_cntnt = depth > 2;
-        bool expect_spc = (is_cls ^ in_cntnt) && in_cntnt;
-
-        initiate_tag(expect_spc);
-
-        char* first_str = currnt_tag->tag_name;
-    }
-    
-    // check_tag_syntax : make it parse_tag_inside
-
     void init_tag_syntax() {
 
-        PositionMatrix<alowwed_no>pos_mat;
+        SyntaxParser<alowwed_no>pos_mat;
         pos_mat.chars = "/:_$ ";
         pos_mat.set('/', ':', Semantic::comesbefore);
         pos_mat.set('$', ':', Semantic::comesbefore);
         pos_mat.set('$', '_', Semantic::comesbefore);
         pos_mat.set('/', '$', Semantic::notcoexist);
-        tg_syntx = pos_mat;
+        tag_syntax = pos_mat;
 
     }
-    Dispatch check_tag_syntax() {
+
+
+    Dispatch check_tag_syntax(TagPos& tag_pos) {
 
         int  temp_char_no = char_no;
         bool temp_in_comnt = at_comnt;
@@ -424,25 +409,31 @@ template <int b_sz> struct ShaderReader {
 
         bool is_tag = true;
 
-        while (get_nxt() != '>'){
-            is_tag = tg_syntx.eval_char(cursr);
-            if (!is_tag) break; 
+        while (get_nxt() != '>') {
+            is_tag = tag_syntax.eval_char(cursr);
+            if (!is_tag) break;
         }
 
-        is_tag = tg_syntx.eval_tag();
-        Dispatch dis_type = tg_syntx.dispatch_type();
-
+        is_tag = tag_syntax.eval_tag();
+        Dispatch dis_type = tag_syntax.dispatch_type();
+        
         if (is_tag) {
-            char_no = temp_char_no - 1;
+            tag_pos.start = temp_char_no - 1;
+            tag_pos.end = char_no;
+            tag_pos.ln_no = temp_ln_no;
+
+            char_no = temp_char_no - 1 + tag_syntax.parse_offset();
             get_nxt();
             cursr;
             at_comnt = temp_in_comnt;
             ln_no = temp_ln_no;
         }
 
+
         return dis_type;
+
     }
-    
+
     void loop() {
         while ((cursr != '<' && !at_comnt) && cursr != '\0')
             get_nxt();
@@ -452,21 +443,28 @@ template <int b_sz> struct ShaderReader {
         loop();
         if (cursr == '\0') return;
 
-
-        Dispatch type = check_tag_syntax();
+        TagPos tag_pos;
+        Dispatch type = check_tag_syntax(tag_pos);
 
         get_nxt();
         skip_whitespc();
-        
+
         switch (type)
         {
         case (Dispatch::open):
-            parse_tag(false);
+            
+            inscope(tag_pos);
+            parse_tag_open();
             break;
-        case Dispatch::close :
-            parse_tag(true);
+
+        case Dispatch::close:
+
+            parse_tag_cls();
+            outscope(tag_pos);
             break;
+
         case Dispatch::paste:
+            inscope(tag_pos);
             parse_paste();
 
         }
@@ -474,7 +472,7 @@ template <int b_sz> struct ShaderReader {
         content_loop();
     }
 
-    
+
     FILE* open_file(const char* file_name) {
         FILE* file = fopen(file_name, "r");
         if (!file) {
@@ -488,34 +486,34 @@ template <int b_sz> struct ShaderReader {
 
         file = open_file(file_name);
         fseek(file, 0, SEEK_END);
-        file_sz = ftell(file)-1;
+        file_sz = ftell(file) - 1;
         fseek(file, 0, SEEK_SET);
-        if ( file_sz >= b_sz) RAISE_INSUFFICIENT_SPACE;
+        if (file_sz >= b_sz) RAISE_INSUFFICIENT_SPACE;
 
         fread(buffer, sizeof(char), file_sz, file);
         fclose(file);
-        strcpy(currnt_tag->tag_name,file_name);
+        strcpy(currnt_tag->tag_name, file_name);
         currnt_tag->append_hash_lnk();
 
         get_nxt();
         content_loop();
-        
+
     }
 
 
-     void compile_shader(const char* enitity,GLenum type) {
+    void compile_shader(const char* enitity, GLenum type) {
         int index = GLshader_to_index(type);
 
-        HashNode enitiyNode,shaderNode;
+        HashNode enitiyNode, shaderNode;
 
         enitiyNode.val = hash(enitity);
         shaderNode.val = shaderNode.val = all_names.hashes[index];
         enitiyNode.next = &shaderNode;
         shaderNode.next = nullptr;
 
-        Tag* found = tgtree.find_in_branch(tgtree.root, & enitiyNode);
-        TagWriter writer (buffer,found);
-        gl_compile_shader(type,writer.tag_content());
+        Tag* found = tgtree.find_in_branch(tgtree.root, &enitiyNode);
+        TagWriter writer(buffer, found);
+        gl_compile_shader(type, writer.tag_content());
 
         delete[] buffer;
 
@@ -525,11 +523,11 @@ template <int b_sz> struct ShaderReader {
 
 int main() {
 
-    ShaderReader<4000> reader ("shaders.h");
+    ShaderReader<4000> reader("shaders.h");
     reader.tgtree.root;
 
     reader.compile_shader("surface", GL_VERTEX_SHADER);
-    
+
     reader.tgtree.root;
     cout << "parsing complete\n";
 
@@ -537,41 +535,5 @@ int main() {
 
 
 
-// Currently: we write into the write_ptr the moment the content is approched
-// What would be better: parse the content
-// first and then write using range_tree_write
-// benefit of parsing the whole file in this format is that paring technique would become
-// consistent from top to bottom
-//check if the get_content_len can accept the range object every time
-
-
-/*
-current approch: Writing the instant we encounter the content.
-is_nxt_tkn_tag checking wheather the nxt char is '<' throwing
-error if not. token name mismatch is not generalised.the sys call at every
-fget at every step. we are egarly wtiting the buffers during constructor.
-every tag that shares the same parent is next via linked list. when entering a tag we
-add it on the stack , after the tag is parsed we pop it out.
-this way the top of stack is the is the tag were in.
-the content in outside the Shaders tag 'vertex','fragment' etc . will be ignored .
-use enums for layers convention
-while file is being parsed, the whole file can be buffered into the buff arr
-after a given shader is requested
-
-
-ALWAYS COUNT THE MONEY
-*/
-
-
-/*
-The end fucntion must handel the continue and 
-end contdition and the cpy_plain_name returns the same 
-
-5, 7, 12 , 16 17 ,18  23  
-
-Aalo 50 rs
-
-*/
-
-/*I will make a file buffer iterator */
-
+// make a char interator object that will be shared with tag tree parser tag_parser 
+// 

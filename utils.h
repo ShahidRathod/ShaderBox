@@ -157,6 +157,13 @@ struct Linked {
 using HashLinkT = Linked<hashT>;
 using HashNode = Node<hashT>;
 
+
+struct TagPos {
+    int ln_no;
+    int start;
+    int end;
+};
+
 struct Tag {
 
     static int counter;
@@ -166,12 +173,10 @@ struct Tag {
     char tag_name[n_sz] = "new_tag";
     int tags_inside = 0;
     int tag_no;
-    int start_ln_no;
-    int opn_tg_start;
-    int cntnt_start;
-    int cntnt_end;
-    int cls_tg_end;
-    int end_ln_no;
+
+    TagPos open;
+    TagPos close;
+
     bool is_writable = false;
 
     HashLinkT hash_lst;
@@ -185,8 +190,8 @@ struct Tag {
         tag_no = counter++;
     }
 
-    inline int tag_len() { return cntnt_start - opn_tg_start + cls_tg_end - cntnt_end; }
-    inline int span() { return cls_tg_end - opn_tg_start; }
+    inline int tag_len() { return open.end - open.start + close.end - close.start; }
+    inline int span() { return close.end - open.start; }
 
     int init_Tag(int depth) { // assumes the tag_name is already written
         if (depth > 1) is_writable = true;
@@ -241,7 +246,7 @@ MemPool<HashNode, 100> Tag::hash_pool;
 
 template <int sz, int max_copy_depth>
 struct TagTree {
-    
+
     Tag safety_padding;
     Tag arr[sz];
     Tag root_obj;
@@ -269,7 +274,7 @@ struct TagTree {
 
     Tag* top() { return stack[stk_len]; }
 
-    Tag* end() { return arr + len-1;}
+    Tag* end() { return arr + len - 1; }
 
     Tag* make_tag() { // gets memory 
         if (len >= sz) {
@@ -332,9 +337,9 @@ struct TagTree {
                 inside_ptr;
                 inside_ptr = inside_ptr->next) {
 
-                if (inside_ptr->type == TagType::Paste && !check_resursive) 
+                if (inside_ptr->type == TagType::Paste && !check_resursive)
                     continue;
-                
+
                 add_nxt_layer(inside_ptr);
 
                 if (hash->val == inside_ptr->tag_hash) {
@@ -350,13 +355,13 @@ struct TagTree {
         return nullptr;
     }
 
-    Tag* find_in_branch(Tag* branch_root, HashNode* hashNode,bool check_resursive = false) {
-        memset(level,0,sizeof(level));
+    Tag* find_in_branch(Tag* branch_root, HashNode* hashNode, bool check_resursive = false) {
+        memset(level, 0, sizeof(level));
         level[0] = branch_root;
         level_sz = 1;
         level_offset = 0;
         nxt_level_sz = 0;
-        return find_hlpr(hashNode,check_resursive);
+        return find_hlpr(hashNode, check_resursive);
     }
 
 
@@ -382,12 +387,12 @@ struct TagWriter {
     char* dst = nullptr;
     char* pen;
     Tag* root;
-    char* tag_content() {return dst;}
+    char* tag_content() { return dst; }
 
 
     inline size_t write_by_range(int start, int end) {
         int len = end - start;
-        memcpy(pen,src+start,len);
+        memcpy(pen, src + start, len);
         pen += len;
         return len;
     }
@@ -395,7 +400,7 @@ struct TagWriter {
     int cntn_len_of_tag(Tag* tag) {
         int cntn_len = tag->span();
         int i = 0;
-        for (; i<tag->tags_inside;i++) {
+        for (; i < tag->tags_inside;i++) {
             if (tag[i].type == TagType::Paste) {
                 cntn_len += cntn_len_of_tag(tag[i].inside);
             }
@@ -407,22 +412,22 @@ struct TagWriter {
     void tag_tree_write(Tag* root) {
         int end, start;
         int i = 0;
-        for (;i<root->tags_inside;i++) {
+        for (;i < root->tags_inside;i++) {
             if (!root[i].is_writable) continue;
             if (root[i].type == TagType::Paste) {
                 tag_tree_write(root[i].inside);
                 continue;
             }
-            start = root[i].cntnt_start;
-            end = root[i].cntnt_end;
+            start = root[i].open.end;
+            end = root[i].close.start;
             if (root[i].tags_inside)
-                end = root[i + 1].opn_tg_start;
+                end = root[i + 1].open.start;
             write_by_range(start, end);
         }
     }
 
 
-    TagWriter(char* fl, Tag* rt ) {
+    TagWriter(char* fl, Tag* rt) {
         src = fl;
         root = rt;
         pen = dst = new char[cntn_len_of_tag(root)];
